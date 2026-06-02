@@ -40,5 +40,6 @@ rutas-web-stop() {
 
 # Solo regenera el HTML del dashboard (sin servir ni abrir).
 rutas-web-build() {
+    command -v node >/dev/null 2>&1 || { echo "✗ node no está instalado" >&2; return 1; }
     node "$RUTAS_DIR/generate-dashboard.js"
 }

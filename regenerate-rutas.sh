@@ -26,9 +26,10 @@ if [ ! -d "$DRIVE" ]; then
     exit 1
 fi
 
-# Normaliza nombres de carpeta a alias-safe (minúsculas; espacios/_ → guión; sin chars raros).
+# Normaliza un nombre de carpeta a un alias-safe ASCII (minúsculas; espacios/_ → guión; resto fuera).
+# LC_ALL=C lo hace DETERMINISTA en ChromeOS, Linux y macOS (mismo resultado, sin depender del locale).
 normalize() {
-    echo "$1" | tr '[:upper:]' '[:lower:]' | tr ' _' '--' | sed 's/^\.//' | sed 's/[^a-z0-9-]//g'
+    printf '%s' "$1" | LC_ALL=C tr '[:upper:]' '[:lower:]' | LC_ALL=C tr ' _' '--' | LC_ALL=C sed 's/^\.//; s/[^a-z0-9-]//g'
 }
 
 # Carpetas que NO generan alias: ocultas, screencast con fecha, Icon\r de Mac, duplicados "(N)".
@@ -39,6 +40,27 @@ should_skip() {
     [[ "$name" == Icon* ]] && return 0
     [[ "$name" =~ \([0-9]+\)$ ]] && return 0
     return 1
+}
+
+# Escapa un nombre para el interior de comillas dobles (\, $, `, ") — evita expansión/inyección
+# cuando el nombre de carpeta contiene caracteres especiales.
+esc_dq() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\$/\\\$}"
+    s="${s//\`/\\\`}"
+    s="${s//\"/\\\"}"
+    printf '%s' "$s"
+}
+
+# Emite una línea de alias robusta:  alias <name>='cd "$DRIVE/<path>"'
+# <path> ya viene escapado para comillas dobles; aquí escapamos las comillas simples del cuerpo
+# (p.ej. carpetas con apóstrofo) para no romper el envoltorio '...'.
+emit_alias() {
+    local name="$1" path_dq="$2"
+    local body="cd \"\$DRIVE/${path_dq}\""
+    body="${body//\'/\'\\\'\'}"
+    printf "alias %s='%s'\n" "$name" "$body"
 }
 
 # Escritura atómica: generar en temporal y mover al final.
@@ -61,7 +83,8 @@ trap 'rm -f "$TMP"' EXIT
         root_name=$(basename "$root")
         should_skip "$root_name" && continue
         alias_root=$(normalize "$root_name")
-        echo "alias cd-${alias_root}='cd \"\$DRIVE/${root_name}\"'"
+        [ -z "$alias_root" ] && continue   # nombre no-ASCII que normaliza a vacío → sin alias
+        emit_alias "cd-${alias_root}" "$(esc_dq "$root_name")"
     done
 
     # Subcarpetas (nivel 2)
@@ -70,19 +93,21 @@ trap 'rm -f "$TMP"' EXIT
         root_name=$(basename "$root")
         should_skip "$root_name" && continue
         alias_root=$(normalize "$root_name")
+        [ -z "$alias_root" ] && continue
 
         has_subs=false
         for sub in "$root"*/; do
             [ -d "$sub" ] || continue
             sub_name=$(basename "$sub")
             should_skip "$sub_name" && continue
+            alias_sub=$(normalize "$sub_name")
+            [ -z "$alias_sub" ] && continue
             if ! $has_subs; then
                 echo ""
                 echo "# === ${root_name}/* ==="
                 has_subs=true
             fi
-            alias_sub=$(normalize "$sub_name")
-            echo "alias cd-${alias_root}-${alias_sub}='cd \"\$DRIVE/${root_name}/${sub_name}\"'"
+            emit_alias "cd-${alias_root}-${alias_sub}" "$(esc_dq "$root_name")/$(esc_dq "$sub_name")"
         done
     done
 } > "$TMP"

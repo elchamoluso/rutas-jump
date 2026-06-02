@@ -31,17 +31,18 @@ RUTAS_BASE=""; RUTAS_PORT="7777"; RUTAS_TITLE="Rutas"; RUTAS_EMOJI="🗂️"; RU
 [ -f "$CONFIG" ] && . "$CONFIG"
 
 # ---------- flags ----------
-ASSUME_YES=false; DO_SHELL=true
+print_help() { awk 'NR>1 && /^#/{sub(/^# ?/,"");print;next} NR>1{exit}' "$0"; }
+ASSUME_YES=false; DO_SHELL=true; BASE_FROM_FLAG=false
 while [ $# -gt 0 ]; do
     case "$1" in
-        --base)   RUTAS_BASE="$2"; shift 2 ;;
-        --port)   RUTAS_PORT="$2"; shift 2 ;;
-        --title)  RUTAS_TITLE="$2"; shift 2 ;;
-        --emoji)  RUTAS_EMOJI="$2"; shift 2 ;;
-        --accent) RUTAS_ACCENT="$2"; shift 2 ;;
+        --base)   RUTAS_BASE="${2:?--base requiere una ruta}"; BASE_FROM_FLAG=true; shift 2 ;;
+        --port)   RUTAS_PORT="${2:?--port requiere un número}"; shift 2 ;;
+        --title)  RUTAS_TITLE="${2:?--title requiere un texto}"; shift 2 ;;
+        --emoji)  RUTAS_EMOJI="${2:?--emoji requiere un valor}"; shift 2 ;;
+        --accent) RUTAS_ACCENT="${2:?--accent requiere un color}"; shift 2 ;;
         --yes|-y) ASSUME_YES=true; shift ;;
         --no-shell) DO_SHELL=false; shift ;;
-        --help|-h) sed -n '2,28p' "$0"; exit 0 ;;
+        --help|-h) print_help; exit 0 ;;
         *) echo "Flag desconocido: $1" >&2; exit 2 ;;
     esac
 done
@@ -75,6 +76,11 @@ detect_base() {
     echo ""
 }
 
+# Si la base heredada de una config previa ya no existe (carpeta movida) y no se pasó --base,
+# vacíala para volver a autodetectar en lugar de fallar.
+if [ -n "$RUTAS_BASE" ] && [ ! -d "$RUTAS_BASE" ] && [ "$BASE_FROM_FLAG" != true ]; then
+    RUTAS_BASE=""
+fi
 if [ -z "$RUTAS_BASE" ]; then
     RUTAS_BASE="$(detect_base)"
 fi
@@ -117,7 +123,7 @@ echo "  ✓ Escrito rutas.config.sh"
 
 # ---------- generar aliases ----------
 echo "→ Generando aliases (escaneando la carpeta base)…"
-bash "$REPO_DIR/regenerate-rutas.sh"
+bash "$REPO_DIR/regenerate-rutas.sh" || { echo "✗ Fallo al generar aliases; revisa RUTAS_BASE en $CONFIG" >&2; exit 1; }
 
 # ---------- cablear el shell ----------
 if [ "$DO_SHELL" = true ]; then
@@ -127,17 +133,23 @@ if [ "$DO_SHELL" = true ]; then
         *) if [ -n "${ZSH_VERSION:-}" ]; then RC="$HOME/.zshrc"; else RC="$HOME/.bashrc"; fi ;;
     esac
     touch "$RC"
-    cp "$RC" "$RC.drivejump.bak" 2>/dev/null || true
+    # Backup del rc original SOLO la primera vez (no clobberear en re-instalaciones).
+    [ -f "$RC.drivejump.bak" ] || cp "$RC" "$RC.drivejump.bak" 2>/dev/null || true
 
-    # Quita cualquier bloque previo de drive-jump y líneas heredadas del sistema antiguo.
+    # Quita el bloque previo de drive-jump (entre marcadores) y las líneas 'source' del
+    # sistema antiguo. Acotado: solo líneas que sourcean .../rutas.sh o .../mac-rutas.sh,
+    # o el comentario exacto heredado — para no borrar líneas legítimas del usuario.
     TMP_RC="$(mktemp)"
     awk '
         /# >>> drive-jump >>>/ {skip=1}
         skip==1 { if (/# <<< drive-jump <<</) skip=0; next }
-        /rutas\.sh|mac-rutas\.sh|Aliases de carpetas Google Drive/ {next}
+        /^[[:space:]]*(source|\.|\[).*\/(rutas|mac-rutas)\.sh/ {next}
+        /^# Aliases de carpetas Google Drive/ {next}
         {print}
     ' "$RC" > "$TMP_RC"
-    mv "$TMP_RC" "$RC"
+    # cat (no mv) para preservar inode/modo/propietario del rc original.
+    cat "$TMP_RC" > "$RC"
+    rm -f "$TMP_RC"
 
     {
         echo ""

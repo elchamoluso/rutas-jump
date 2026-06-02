@@ -26,13 +26,15 @@ const DIR = __dirname;
 const HTML = path.join(DIR, 'dashboard.html');
 const GEN = path.join(DIR, 'generate-dashboard.js');
 
-// Puerto: env RUTAS_PORT → RUTAS_PORT de rutas.config.sh → 7777.
+// Puerto: env RUTAS_PORT → RUTAS_PORT de rutas.config.sh → 7777. Valida que sea un puerto real.
+function validPort(n) { return Number.isInteger(n) && n > 0 && n < 65536; }
 function configPort() {
-  if (process.env.RUTAS_PORT) return parseInt(process.env.RUTAS_PORT, 10);
+  const env = parseInt(process.env.RUTAS_PORT, 10);
+  if (validPort(env)) return env;
   try {
     const txt = fs.readFileSync(path.join(DIR, 'rutas.config.sh'), 'utf8');
-    const m = txt.match(/^\s*RUTAS_PORT\s*=\s*"?(\d+)"?/m);
-    if (m) return parseInt(m[1], 10);
+    const m = txt.match(/^\s*(?:export\s+)?RUTAS_PORT\s*=\s*"?(\d+)"?/m);
+    if (m) { const p = parseInt(m[1], 10); if (validPort(p)) return p; }
   } catch (e) {}
   return 7777;
 }

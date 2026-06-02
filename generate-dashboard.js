@@ -31,7 +31,7 @@ function readConfig(file) {
   let txt;
   try { txt = fs.readFileSync(file, 'utf8'); } catch (e) { return cfg; }
   for (const line of txt.split('\n')) {
-    const m = line.match(/^\s*(RUTAS_[A-Z_]+)\s*=\s*(.*)$/);
+    const m = line.match(/^\s*(?:export\s+)?(RUTAS_[A-Z_]+)\s*=\s*(.*)$/);
     if (!m) continue;
     let v = m[2].trim();
     if (v.startsWith('"')) { const e = v.indexOf('"', 1); if (e !== -1) v = v.slice(1, e); }
@@ -44,8 +44,13 @@ function readConfig(file) {
 
 const CONFIG_FILE = path.join(SCRIPT_DIR, 'rutas.config.sh');
 const CFG = readConfig(CONFIG_FILE);
-// Carpeta base a escanear: env DRIVE → RUTAS_BASE de la config → (legacy) dos niveles arriba.
-const DRIVE = process.env.DRIVE || expandHome(CFG.RUTAS_BASE) || path.resolve(SCRIPT_DIR, '..', '..');
+// Carpeta base a escanear: variable de entorno DRIVE → RUTAS_BASE de la config.
+const DRIVE = process.env.DRIVE || expandHome(CFG.RUTAS_BASE);
+if (!DRIVE) {
+  console.error('ERROR: no hay carpeta base. Falta rutas.config.sh (RUTAS_BASE) o la variable $DRIVE.');
+  console.error('  Ejecuta primero:  bash install.sh');
+  process.exit(1);
+}
 const BRAND = {
   title: CFG.RUTAS_TITLE || 'Rutas',
   emoji: CFG.RUTAS_EMOJI || '🗂️',
