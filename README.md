@@ -161,4 +161,4 @@ AGENTS.md               Notas para agentes AI
 
 ## 📝 Licencia
 
-[MIT](LICENSE) · Hecho por **Jesús M. Ferreira** ([@elchamoluso](https://github.com/elchamoluso)).
+[MIT](LICENSE) · Hecho por **Jesús Ferreira** ([@elchamoluso](https://github.com/elchamoluso)).
