@@ -93,6 +93,18 @@
         { "cmd": "gws calendar +agenda --timezone Europe/Lisbon", "desc": "Helper que muestra los próximos eventos del calendario en la zona horaria indicada." },
         { "cmd": "gws calendar +insert", "desc": "Helper para crear un evento nuevo (ejecuta con --help para ver sus opciones)." }
       ]
+    },
+    {
+      "name": "Cerebro · archivar proyectos",
+      "icon": "📦",
+      "source": "",
+      "commands": [
+        { "cmd": "/archivar-proyecto <carpeta>", "desc": "En sesión de Claude: archiva un proyecto — sube el código a GitHub, mueve la copia a ~/dev y deja en la carpeta del Drive solo el contexto (CLAUDE.md + .claude/)." },
+        { "cmd": "/archivar-proyecto <carpeta> preview", "desc": "Igual pero solo muestra el plan (DRY-RUN), sin tocar nada." },
+        { "cmd": "bash \"$DRIVE/.claude/bin/archive-project.sh\" <carpeta>", "desc": "Motor directo en terminal (DRY-RUN): muestra el plan; no toca nada sin --go." },
+        { "cmd": "bash \"$DRIVE/.claude/bin/archive-project.sh\" <carpeta> --go", "desc": "Ejecuta de verdad: verifica el push a GitHub antes de mover/borrar, mueve lo no-regenerable a ~/dev y deja el albarán en el Drive." },
+        { "cmd": "git -C ~/dev/<repo> pull", "desc": "Continuar un proyecto ya archivado: actualiza la copia local desde GitHub y trabaja en ~/dev (nunca en el Drive)." }
+      ]
     }
   ]
 }
