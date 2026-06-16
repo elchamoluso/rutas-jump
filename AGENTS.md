@@ -1,14 +1,15 @@
-# drive-jump — Instrucciones para agentes AI
+# rutas-jump — Instrucciones para agentes AI
 
 **Audiencia:** Claude Code, agy (Antigravity/Gemini CLI) o cualquier agente con acceso al
 filesystem donde está clonado este repo.
 
 ## Qué es este sistema
 
-Permite navegar una carpeta base (típicamente un Google Drive sincronizado) desde la terminal
-mediante aliases `cd-*` autogenerados, más un dashboard web local que muestra el árbol de carpetas
-y comandos copiables. Es **cross-platform** (ChromeOS/Crostini, macOS, Linux) y configurable: cada
-usuario define su caso en `rutas.config.sh`.
+Permite navegar una o varias **raíces** (My Drive, Unidades Compartidas, carpetas del home…) desde la
+terminal mediante aliases `cd-*` autogenerados, más un dashboard web local que agrupa cada raíz en su
+sección. Es **cross-platform** (ChromeOS/Crostini, macOS, Linux) y configurable: cada usuario define
+sus raíces en `rutas.config.sh` con líneas `RUTAS_ROOT_N="etiqueta|path|prefijo|maxdepth|filtro"`
+(retro-compat: `RUTAS_BASE` como raíz única si no hay ninguna).
 
 ## Componentes
 
@@ -59,7 +60,9 @@ carpeta del repo (la exporta `loader.sh`).
 | `screencast-YYYY-MM-DD…`, `Icon`, duplicados `(N)` | omitir | — |
 | Otros caracteres | eliminar | salvo `a-z 0-9 -` |
 
-Patrón: raíz `cd-<root>`, subcarpeta `cd-<root>-<sub>`.
+Patrón de alias: My Drive (prefijo vacío) → `cd-<root>`, `cd-<root>-<sub>` (y `cd-drive`). Raíces con
+prefijo → `cd-<prefijo>-<root>[-<sub>]` (p.ej. `cd-sd-lusomagnet`, `cd-home-dev`). Var base por raíz:
+`$DRIVE` (My Drive), `$DRIVE_SD`, `$DRIVE_HOME`.
 
 ## Dashboard web
 

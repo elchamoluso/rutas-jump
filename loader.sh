@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# loader.sh — punto de entrada de drive-jump.
+# loader.sh — punto de entrada de rutas-jump.
 # Lo sourcea tu ~/.bashrc (bash) o ~/.zshrc (zsh). install.sh lo cablea por ti.
 #
 # Orden de carga:

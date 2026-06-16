@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# regenerate-rutas.sh — escanea RUTAS_BASE y regenera rutas.generated.sh con los
-# aliases cd-* actualizados. Cross-platform (ChromeOS, macOS, Linux).
+# regenerate-rutas.sh — escanea las raíces (RUTAS_ROOT_*) y regenera rutas.generated.sh
+# con los aliases cd-* actualizados. Cross-platform (ChromeOS, macOS, Linux).
 #
-# La carpeta a escanear se lee de rutas.config.sh (RUTAS_BASE).
+# Las raíces se leen de rutas.config.sh:
+#   RUTAS_ROOT_N="etiqueta|path|prefijo|maxdepth|filtro"   (filtro: "" | "whitelist:a,b")
+# Retro-compat: si no hay RUTAS_ROOT_*, se usa RUTAS_BASE como raíz única (sin prefijo).
 # Ejecutar:  bash regenerate-rutas.sh      ·      o vía función:  rutas-refresh
 set -e
 
@@ -17,12 +19,23 @@ fi
 # shellcheck source=/dev/null
 . "$CONFIG"
 
-DRIVE="${RUTAS_BASE:?RUTAS_BASE no está definido en rutas.config.sh}"
 OUT="$SCRIPT_DIR/rutas.generated.sh"
 
-if [ ! -d "$DRIVE" ]; then
-    echo "ERROR: la carpeta base no existe: $DRIVE" >&2
-    echo "  Edita RUTAS_BASE en $CONFIG (¿Drive montado?)." >&2
+# --- Recolectar las raíces (RUTAS_ROOT_1, _2, …) o caer a RUTAS_BASE ---
+roots=()
+i=1
+while :; do
+    var="RUTAS_ROOT_$i"
+    val="${!var:-}"
+    [ -z "$val" ] && break
+    roots+=("$val")
+    i=$((i + 1))
+done
+if [ ${#roots[@]} -eq 0 ] && [ -n "${RUTAS_BASE:-}" ]; then
+    roots+=("Drive|$RUTAS_BASE||40|")
+fi
+if [ ${#roots[@]} -eq 0 ]; then
+    echo "ERROR: ni RUTAS_ROOT_* ni RUTAS_BASE definidos en $CONFIG" >&2
     exit 1
 fi
 
@@ -42,8 +55,7 @@ should_skip() {
     return 1
 }
 
-# Escapa un nombre para el interior de comillas dobles (\, $, `, ") — evita expansión/inyección
-# cuando el nombre de carpeta contiene caracteres especiales.
+# Escapa un nombre para el interior de comillas dobles (\, $, `, ").
 esc_dq() {
     local s="$1"
     s="${s//\\/\\\\}"
@@ -53,14 +65,22 @@ esc_dq() {
     printf '%s' "$s"
 }
 
-# Emite una línea de alias robusta:  alias <name>='cd "$DRIVE/<path>"'
-# <path> ya viene escapado para comillas dobles; aquí escapamos las comillas simples del cuerpo
-# (p.ej. carpetas con apóstrofo) para no romper el envoltorio '...'.
+# Emite:  alias <name>='cd "$<VAR>/<path>"'   (<path> ya escapado para comillas dobles)
 emit_alias() {
-    local name="$1" path_dq="$2"
-    local body="cd \"\$DRIVE/${path_dq}\""
+    local name="$1" var="$2" path_dq="$3"
+    local body="cd \"\$${var}/${path_dq}\""
     body="${body//\'/\'\\\'\'}"
     printf "alias %s='%s'\n" "$name" "$body"
+}
+
+# ¿está $1 en la lista CSV $2?
+in_csv() {
+    case ",$2," in *",$1,"*) return 0 ;; *) return 1 ;; esac
+}
+
+# Nombre de la variable base para un prefijo ("" → DRIVE, "sd" → DRIVE_SD).
+var_for_prefix() {
+    if [ -z "$1" ]; then printf 'DRIVE'; else printf 'DRIVE_%s' "$(printf '%s' "$1" | LC_ALL=C tr '[:lower:]' '[:upper:]')"; fi
 }
 
 # Escritura atómica: generar en temporal y mover al final.
@@ -72,42 +92,51 @@ trap 'rm -f "$TMP"' EXIT
     echo "# rutas.generated.sh — AUTOGENERADO por regenerate-rutas.sh. NO EDITAR."
     echo "# Atajos personales en custom-aliases.sh · Regenerar: rutas-refresh"
     echo ""
-    echo "export DRIVE=\"$DRIVE\""
-    echo ""
-    echo "# === Raíces ==="
-    echo "alias cd-drive='cd \"\$DRIVE\"'"
 
-    # Raíces (nivel 1)
-    for root in "$DRIVE"/*/; do
-        [ -d "$root" ] || continue
-        root_name=$(basename "$root")
-        should_skip "$root_name" && continue
-        alias_root=$(normalize "$root_name")
-        [ -z "$alias_root" ] && continue   # nombre no-ASCII que normaliza a vacío → sin alias
-        emit_alias "cd-${alias_root}" "$(esc_dq "$root_name")"
+    # --- exports de las variables base (una por raíz) ---
+    for entry in "${roots[@]}"; do
+        IFS='|' read -r r_label r_base r_prefix r_maxd r_filter <<< "$entry"
+        case "$r_base" in "~"|"~/"*) r_base="$HOME${r_base#\~}" ;; esac
+        [ -d "$r_base" ] || continue
+        var="$(var_for_prefix "$r_prefix")"
+        printf 'export %s="%s"\n' "$var" "$r_base"
     done
 
-    # Subcarpetas (nivel 2)
-    for root in "$DRIVE"/*/; do
-        [ -d "$root" ] || continue
-        root_name=$(basename "$root")
-        should_skip "$root_name" && continue
-        alias_root=$(normalize "$root_name")
-        [ -z "$alias_root" ] && continue
+    # --- aliases por raíz (nivel 1 y 2) ---
+    for entry in "${roots[@]}"; do
+        IFS='|' read -r r_label r_base r_prefix r_maxd r_filter <<< "$entry"
+        case "$r_base" in "~"|"~/"*) r_base="$HOME${r_base#\~}" ;; esac
+        [ -d "$r_base" ] || continue
+        var="$(var_for_prefix "$r_prefix")"
+        if [ -z "$r_prefix" ]; then aprefix=""; else aprefix="${r_prefix}-"; fi
+        wl=""
+        case "$r_filter" in whitelist:*) wl="${r_filter#whitelist:}" ;; esac
 
-        has_subs=false
-        for sub in "$root"*/; do
-            [ -d "$sub" ] || continue
-            sub_name=$(basename "$sub")
-            should_skip "$sub_name" && continue
-            alias_sub=$(normalize "$sub_name")
-            [ -z "$alias_sub" ] && continue
-            if ! $has_subs; then
-                echo ""
-                echo "# === ${root_name}/* ==="
-                has_subs=true
-            fi
-            emit_alias "cd-${alias_root}-${alias_sub}" "$(esc_dq "$root_name")/$(esc_dq "$sub_name")"
+        echo ""
+        echo "# === ${r_label} ==="
+        if [ -z "$r_prefix" ]; then
+            echo "alias cd-drive='cd \"\$${var}\"'"
+        else
+            echo "alias cd-${r_prefix}='cd \"\$${var}\"'"
+        fi
+
+        # Raíces (nivel 1) + subcarpetas (nivel 2)
+        for root in "$r_base"/*/; do
+            [ -d "$root" ] || continue
+            root_name=$(basename "$root")
+            should_skip "$root_name" && continue
+            [ -n "$wl" ] && { in_csv "$root_name" "$wl" || continue; }
+            alias_root=$(normalize "$root_name")
+            [ -z "$alias_root" ] && continue
+            emit_alias "cd-${aprefix}${alias_root}" "$var" "$(esc_dq "$root_name")"
+            for sub in "$root"*/; do
+                [ -d "$sub" ] || continue
+                sub_name=$(basename "$sub")
+                should_skip "$sub_name" && continue
+                alias_sub=$(normalize "$sub_name")
+                [ -z "$alias_sub" ] && continue
+                emit_alias "cd-${aprefix}${alias_root}-${alias_sub}" "$var" "$(esc_dq "$root_name")/$(esc_dq "$sub_name")"
+            done
         done
     done
 } > "$TMP"

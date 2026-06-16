@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /*
- * generate-dashboard.js — Escanea las carpetas del Drive + parsea los aliases cd-*
- * y genera un dashboard.html AUTOCONTENIDO (rutas copiables + comandos).
+ * generate-dashboard.js — Escanea varias raíces (My Drive · Unidades Compartidas · home…)
+ * + parsea los aliases cd-* y genera un dashboard.html AUTOCONTENIDO (rutas copiables + comandos).
  *
  * Cero dependencias (solo módulos nativos de Node).
  *
  * Uso:        node generate-dashboard.js [--max-depth N]
- * Cron:       lo llama regenerate-rutas.sh tras regenerar rutas.sh (cada 30 min).
- * On-demand:  el alias `rutas-web` (en extra-aliases.sh) regenera y abre el dashboard.
+ * Cron:       lo llama regenerate-rutas.sh tras regenerar rutas.generated.sh.
+ * On-demand:  el comando `rutas-web` regenera y abre el dashboard.
  */
 'use strict';
 const fs = require('fs');
@@ -31,7 +31,7 @@ function readConfig(file) {
   let txt;
   try { txt = fs.readFileSync(file, 'utf8'); } catch (e) { return cfg; }
   for (const line of txt.split('\n')) {
-    const m = line.match(/^\s*(?:export\s+)?(RUTAS_[A-Z_]+)\s*=\s*(.*)$/);
+    const m = line.match(/^\s*(?:export\s+)?(RUTAS_[A-Z0-9_]+)\s*=\s*(.*)$/);
     if (!m) continue;
     let v = m[2].trim();
     if (v.startsWith('"')) { const e = v.indexOf('"', 1); if (e !== -1) v = v.slice(1, e); }
@@ -44,13 +44,7 @@ function readConfig(file) {
 
 const CONFIG_FILE = path.join(SCRIPT_DIR, 'rutas.config.sh');
 const CFG = readConfig(CONFIG_FILE);
-// Carpeta base a escanear: variable de entorno DRIVE → RUTAS_BASE de la config.
-const DRIVE = process.env.DRIVE || expandHome(CFG.RUTAS_BASE);
-if (!DRIVE) {
-  console.error('ERROR: no hay carpeta base. Falta rutas.config.sh (RUTAS_BASE) o la variable $DRIVE.');
-  console.error('  Ejecuta primero:  bash install.sh');
-  process.exit(1);
-}
+
 const BRAND = {
   title: CFG.RUTAS_TITLE || 'Rutas',
   emoji: CFG.RUTAS_EMOJI || '🗂️',
@@ -65,12 +59,52 @@ const EXCLUDE_NAMES = new Set([
 // Salta dotfolders y screencast-YYYY-MM-DD (igual que should_skip en regenerate-rutas.sh)
 const SCREENCAST_RE = /^screencast-\d{4}-\d{2}-\d{2}/;
 
-// Tope de profundidad de escaneo (seguridad anti-bucles). Override: --max-depth N
+// Tope de profundidad por defecto (si una raíz no define el suyo). Override global: --max-depth N
 let MAX_DEPTH = 40;
 const mdIdx = process.argv.indexOf('--max-depth');
 if (mdIdx !== -1 && process.argv[mdIdx + 1]) {
   const n = parseInt(process.argv[mdIdx + 1], 10);
   if (!isNaN(n) && n > 0) MAX_DEPTH = n;
+}
+
+// --- Raíces múltiples: RUTAS_ROOT_N="etiqueta|path|prefijo|maxdepth|filtro" ---
+// filtro: "" (escanea todo el nivel 1) | "whitelist:a,b" (solo esas carpetas de nivel 1)
+// prefijo: vacío = My Drive (alias sin prefijo, var $DRIVE) · "sd"/"home" = prefijo de alias + var $DRIVE_SD/$DRIVE_HOME
+function parseRoots(cfg) {
+  const keys = Object.keys(cfg).filter(k => /^RUTAS_ROOT_\d+$/.test(k))
+    .sort((a, b) => parseInt(a.slice(11), 10) - parseInt(b.slice(11), 10));
+  const roots = [];
+  for (const k of keys) {
+    const parts = cfg[k].split('|');
+    const base = expandHome((parts[1] || '').trim());
+    if (!base) continue;
+    const prefix = (parts[2] || '').trim();
+    const mdn = parseInt((parts[3] || '').trim(), 10);
+    const filter = (parts[4] || '').trim();
+    roots.push({
+      id: prefix || 'md',
+      label: (parts[0] || base).trim(),
+      base,
+      prefix,
+      varName: prefix ? 'DRIVE_' + prefix.toUpperCase() : 'DRIVE',
+      maxdepth: (!isNaN(mdn) && mdn > 0) ? mdn : MAX_DEPTH,
+      whitelist: filter.startsWith('whitelist:')
+        ? filter.slice('whitelist:'.length).split(',').map(s => s.trim()).filter(Boolean) : null,
+    });
+  }
+  return roots;
+}
+
+let ROOTS = parseRoots(CFG);
+if (!ROOTS.length) {
+  // Retro-compat: una sola raíz desde RUTAS_BASE (o $DRIVE del entorno).
+  const base = process.env.DRIVE || expandHome(CFG.RUTAS_BASE);
+  if (base) ROOTS = [{ id: 'md', label: 'Drive', base, prefix: '', varName: 'DRIVE', maxdepth: MAX_DEPTH, whitelist: null }];
+}
+if (!ROOTS.length) {
+  console.error('ERROR: no hay ninguna raíz. Define RUTAS_ROOT_* o RUTAS_BASE en rutas.config.sh.');
+  console.error('  Ejecuta primero:  bash install.sh');
+  process.exit(1);
 }
 
 const TEMPLATE = path.join(SCRIPT_DIR, 'dashboard.template.html');
@@ -88,77 +122,84 @@ function shouldSkip(name) {
   return false;
 }
 
-// Escaneo recursivo de una raíz. Devuelve [{name, abs, rel, depth, root}]
-function scanRoot(rootName) {
+// Escaneo de una raíz. Devuelve { roots:[nombres nivel-1], folders:[{name,abs,rel,depth,root}] }
+// rel es relativo a root.base (único DENTRO de la sección).
+function scanBase(root) {
   const out = [];
-  const rootAbs = path.join(DRIVE, rootName);
-  (function walk(dirAbs, depth) {
-    if (depth > MAX_DEPTH) return;
-    let entries;
-    try { entries = fs.readdirSync(dirAbs, { withFileTypes: true }); }
-    catch (e) { return; } // permisos / dir ilegible → se salta
-    for (const ent of entries) {
-      if (!ent.isDirectory()) continue;          // ignora archivos y symlinks (evita bucles)
-      const name = ent.name;
-      if (shouldSkip(name)) continue;
-      const abs = path.join(dirAbs, name);
-      out.push({ name, abs, rel: path.relative(DRIVE, abs), depth, root: rootName });
-      walk(abs, depth + 1);
-    }
-  })(rootAbs, 1);
-  return out;
+  let level1;
+  try { level1 = fs.readdirSync(root.base, { withFileTypes: true }); }
+  catch (e) { return { roots: [], folders: [] }; }
+  const rootNames = level1
+    .filter(d => d.isDirectory() && !shouldSkip(d.name))
+    .filter(d => !root.whitelist || root.whitelist.includes(d.name))
+    .map(d => d.name)
+    .sort();
+  for (const rn of rootNames) {
+    const rootAbs = path.join(root.base, rn);
+    (function walk(dirAbs, depth) {
+      if (depth > root.maxdepth) return;
+      let entries;
+      try { entries = fs.readdirSync(dirAbs, { withFileTypes: true }); }
+      catch (e) { return; } // permisos / dir ilegible → se salta
+      for (const ent of entries) {
+        if (!ent.isDirectory()) continue;          // ignora archivos y symlinks (evita bucles)
+        const name = ent.name;
+        if (shouldSkip(name)) continue;
+        const abs = path.join(dirAbs, name);
+        out.push({ name, abs, rel: path.relative(root.base, abs), depth, root: rn });
+        walk(abs, depth + 1);
+      }
+    })(rootAbs, 1);
+  }
+  return { roots: rootNames, folders: out };
 }
 
-// Parsea  alias cd-XXX='cd "$DRIVE/PATH"'  → [{alias, rel}]
-function parseAliases(file) {
+// Parsea  alias cd-XXX='cd "$VAR/PATH"'  resolviendo $VAR→base. Devuelve [{alias, rel, abs}].
+function parseAliases(file, baseByVar) {
   let txt;
   try { txt = fs.readFileSync(file, 'utf8'); } catch (e) { return []; }
-  const re = /alias\s+(cd-[\w-]+)='cd\s+"\$DRIVE\/([^"]+)"'/g;
+  const re = /alias\s+(cd-[\w-]+)='cd\s+"\$(DRIVE[A-Z0-9_]*)\/([^"]+)"'/g;
   const res = [];
   let m;
-  while ((m = re.exec(txt)) !== null) res.push({ alias: m[1], rel: m[2] });
+  while ((m = re.exec(txt)) !== null) {
+    const base = baseByVar[m[2]];
+    if (!base) continue;
+    res.push({ alias: m[1], rel: m[3], abs: path.join(base, m[3]) });
+  }
   return res;
 }
 
 // ---------------- escaneo ----------------
 const t0 = Date.now();
+const baseByVar = {};
+ROOTS.forEach(r => { baseByVar[r.varName] = r.base; });
 
-let rootNames;
-try {
-  rootNames = fs.readdirSync(DRIVE, { withFileTypes: true })
-    .filter(d => d.isDirectory() && !shouldSkip(d.name))
-    .map(d => d.name)
-    .sort();
-} catch (e) {
-  console.error('ERROR: no se pudo leer DRIVE =', DRIVE, '\n ', e.message);
-  process.exit(1);
+const sections = [];
+let totalFolders = 0;
+const perSection = {};
+for (const r of ROOTS) {
+  const { roots, folders } = scanBase(r);
+  perSection[r.id] = folders.length;
+  totalFolders += folders.length;
+  sections.push({ id: r.id, label: r.label, base: r.base, prefix: r.prefix, roots, folders });
 }
 
-let folders = [];
-const perRoot = {};
-for (const r of rootNames) {
-  const f = scanRoot(r);
-  perRoot[r] = f.length;
-  folders = folders.concat(f);
-}
-
-// ---------------- aliases ----------------
+// ---------------- aliases (indexados por ruta ABSOLUTA → sin colisión entre secciones) ----------------
 const aliasByPath = {};
-for (const a of parseAliases(GENERATED_SH).concat(parseAliases(CUSTOM_SH))) {
-  if (!aliasByPath[a.rel]) aliasByPath[a.rel] = [];
-  if (!aliasByPath[a.rel].includes(a.alias)) aliasByPath[a.rel].push(a.alias);
+for (const a of parseAliases(GENERATED_SH, baseByVar).concat(parseAliases(CUSTOM_SH, baseByVar))) {
+  if (!aliasByPath[a.abs]) aliasByPath[a.abs] = [];
+  if (!aliasByPath[a.abs].includes(a.alias)) aliasByPath[a.abs].push(a.alias);
 }
 
 // Favoritos = aliases custom de custom-aliases.sh que apuntan a carpetas existentes
 const favSeen = new Set();
 const favorites = [];
-for (const a of parseAliases(CUSTOM_SH)) {
+for (const a of parseAliases(CUSTOM_SH, baseByVar)) {
   if (favSeen.has(a.alias)) continue;
   favSeen.add(a.alias);
-  const abs = path.join(DRIVE, a.rel);
   let exists = false;
-  try { exists = fs.statSync(abs).isDirectory(); } catch (e) {}
-  if (exists) favorites.push({ alias: a.alias, rel: a.rel, abs });
+  try { exists = fs.statSync(a.abs).isDirectory(); } catch (e) {}
+  if (exists) favorites.push({ alias: a.alias, rel: a.rel, abs: a.abs });
 }
 favorites.sort((x, y) => x.alias.localeCompare(y.alias));
 
@@ -173,20 +214,18 @@ const now = new Date();
 const DATA = {
   generatedAt: now.toISOString(),
   generatedAtHuman: now.toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }),
-  driveRoot: DRIVE,
   brand: BRAND,
   platform: process.platform,
-  roots: rootNames,
-  folders,
+  sections,
   aliasByPath,
   favorites,
   commands,
   stats: {
-    folderCount: folders.length,
-    rootCount: rootNames.length,
+    folderCount: totalFolders,
+    sectionCount: sections.length,
     commandCount: cmdCount,
     aliasCount: Object.keys(aliasByPath).length,
-    perRoot,
+    perSection,
   },
 };
 
@@ -213,5 +252,5 @@ fs.renameSync(OUT_TMP, OUT);
 
 const ms = Date.now() - t0;
 const kb = (Buffer.byteLength(html) / 1024).toFixed(0);
-console.log(`✓ dashboard.html generado — ${folders.length} carpetas · ${rootNames.length} raíces · ${cmdCount} comandos · ${favorites.length} favoritos · ${kb} KB · ${ms} ms`);
+console.log(`✓ dashboard.html generado — ${totalFolders} carpetas · ${sections.length} secciones · ${cmdCount} comandos · ${favorites.length} favoritos · ${kb} KB · ${ms} ms`);
 console.log('  Abrir: ' + OUT);

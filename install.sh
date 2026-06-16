@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — instalador de drive-jump (ChromeOS · macOS · Linux).
+# install.sh — instalador de rutas-jump (ChromeOS · macOS · Linux).
 #
 # Qué hace:
 #   1) Detecta tu carpeta base (tu Google Drive, o la que indiques) y tu shell.
@@ -47,7 +47,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-echo "drive-jump · instalador"
+echo "rutas-jump · instalador"
 echo "  repo: $REPO_DIR"
 
 # ---------- detectar carpeta base ----------
@@ -110,6 +110,9 @@ fi
 echo "  base: $RUTAS_BASE"
 
 # ---------- escribir config ----------
+# Preserva tus líneas multi-raíz / arranque (RUTAS_ROOT_*, RUTAS_START_DIR) entre re-instalaciones.
+PRESERVE=""
+[ -f "$CONFIG" ] && PRESERVE="$(grep -E '^[[:space:]]*(RUTAS_ROOT_[0-9]+|RUTAS_START_DIR)=' "$CONFIG" 2>/dev/null || true)"
 cat > "$CONFIG" <<EOF
 # rutas.config.sh — configuración local (generado por install.sh; edítalo libremente).
 # Está en .gitignore: es tuyo, no se publica.
@@ -119,6 +122,9 @@ RUTAS_TITLE="$RUTAS_TITLE"
 RUTAS_EMOJI="$RUTAS_EMOJI"
 RUTAS_ACCENT="$RUTAS_ACCENT"
 EOF
+if [ -n "$PRESERVE" ]; then
+    { echo ""; echo "# Multi-raíz / arranque (preservado de tu config previa; edítalo a mano)."; printf '%s\n' "$PRESERVE"; } >> "$CONFIG"
+fi
 echo "  ✓ Escrito rutas.config.sh"
 
 # ---------- generar aliases ----------
@@ -134,15 +140,15 @@ if [ "$DO_SHELL" = true ]; then
     esac
     touch "$RC"
     # Backup del rc original SOLO la primera vez (no clobberear en re-instalaciones).
-    [ -f "$RC.drivejump.bak" ] || cp "$RC" "$RC.drivejump.bak" 2>/dev/null || true
+    [ -f "$RC.rutasjump.bak" ] || [ -f "$RC.drivejump.bak" ] || cp "$RC" "$RC.rutasjump.bak" 2>/dev/null || true
 
-    # Quita el bloque previo de drive-jump (entre marcadores) y las líneas 'source' del
-    # sistema antiguo. Acotado: solo líneas que sourcean .../rutas.sh o .../mac-rutas.sh,
-    # o el comentario exacto heredado — para no borrar líneas legítimas del usuario.
+    # Quita el bloque previo (marcadores drive-jump O rutas-jump, para limpiar el legacy
+    # sin dejar huérfanos) y las líneas 'source' del sistema antiguo. Acotado para no borrar
+    # líneas legítimas del usuario.
     TMP_RC="$(mktemp)"
     awk '
-        /# >>> drive-jump >>>/ {skip=1}
-        skip==1 { if (/# <<< drive-jump <<</) skip=0; next }
+        /# >>> (drive|rutas)-jump >>>/ {skip=1}
+        skip==1 { if (/# <<< (drive|rutas)-jump <<</) skip=0; next }
         /^[[:space:]]*(source|\.|\[).*\/(rutas|mac-rutas)\.sh/ {next}
         /^# Aliases de carpetas Google Drive/ {next}
         {print}
@@ -153,12 +159,12 @@ if [ "$DO_SHELL" = true ]; then
 
     {
         echo ""
-        echo "# >>> drive-jump >>>"
+        echo "# >>> rutas-jump >>>"
         echo "export RUTAS_DIR=\"$REPO_DIR\""
         echo "[ -f \"\$RUTAS_DIR/loader.sh\" ] && . \"\$RUTAS_DIR/loader.sh\""
-        echo "# <<< drive-jump <<<"
+        echo "# <<< rutas-jump <<<"
     } >> "$RC"
-    echo "  ✓ Cableado $RC (backup en $RC.drivejump.bak)"
+    echo "  ✓ Cableado $RC (backup en $RC.rutasjump.bak)"
 else
     echo "  (--no-shell: no se tocó ningún rc)"
 fi

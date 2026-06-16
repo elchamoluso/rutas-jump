@@ -114,10 +114,15 @@
   /* acciones del árbol: aparecen al pasar el ratón (o con foco de teclado) */
   summary .acts,.tline .acts{opacity:0;transition:opacity .12s}
   summary:hover .acts,summary:focus-within .acts,.tline:hover .acts,.tline:focus-within .acts{opacity:1}
-  /* cabecera de sección */
+  /* cabecera de página */
   .page-head{margin:2px 2px 14px}
   .page-head h2{margin:0;font-size:24px;font-weight:600;letter-spacing:-.01em;color:var(--on-surface)}
   .page-head p{margin:4px 0 0;font-size:13px;color:var(--on-variant)}
+  /* cabecera de cada raíz/sección (My Drive · Unidades Compartidas · Linux) */
+  .section-head{margin:22px 2px 10px;font-size:13px;font-weight:600;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--accent-soft);display:flex;align-items:center;gap:10px}
+  .section-head::after{content:"";flex:1;height:1px;background:var(--outline-variant)}
+  .section-head:first-of-type{margin-top:8px}
   /* scrollbar oscuro */
   ::-webkit-scrollbar{width:10px;height:10px}
   ::-webkit-scrollbar-track{background:var(--bg)}
@@ -267,7 +272,7 @@
 
   // ---- árbol de rutas: cada carpeta con sus alias cd- y botones; expande nivel a nivel ----
   function aliasChips(node, main, inSummary){
-    const al = DATA.aliasByPath[node.rel];
+    const al = DATA.aliasByPath[node.abs];
     if (!al) return;
     al.forEach(a=>{ const c = el('button','chip'); c.textContent = a; c.title = 'Copiar alias';
       c.onclick = ev=>{ if (inSummary) ev.stopPropagation(); copyText(a, c); }; main.appendChild(c); });
@@ -311,17 +316,19 @@
     const row = el('div','tline'); treeContent(row, node, false);
     card.appendChild(row); return card;
   }
-  function buildTree(){
+  // Construye el árbol de UNA sección. El índice es por `rel` DENTRO de la sección,
+  // así que dos secciones con el mismo `rel` no colisionan (mapa nuevo por llamada).
+  function buildSectionTree(section){
     const map = new Map();
-    DATA.roots.forEach(r=> map.set(r, { name:r, rel:r, abs: DATA.driveRoot + '/' + r, children:[] }));
-    DATA.folders.forEach(f=> map.set(f.rel, { name:f.name, rel:f.rel, abs:f.abs, children:[] }));
-    DATA.folders.forEach(f=>{
+    (section.roots || []).forEach(r=> map.set(r, { name:r, rel:r, abs: section.base + '/' + r, children:[] }));
+    (section.folders || []).forEach(f=> map.set(f.rel, { name:f.name, rel:f.rel, abs:f.abs, children:[] }));
+    (section.folders || []).forEach(f=>{
       const i = f.rel.lastIndexOf('/');
       const parent = map.get(i === -1 ? f.root : f.rel.slice(0, i)) || map.get(f.root);
       if (parent) parent.children.push(map.get(f.rel));
     });
     map.forEach(n=> n.children.sort((a,b)=>a.name.localeCompare(b.name)));
-    return DATA.roots.map(r=>map.get(r)).filter(Boolean);
+    return (section.roots || []).map(r=>map.get(r)).filter(Boolean);
   }
 
   // ---- fila plana (favoritos y resultados de búsqueda) ----
@@ -380,7 +387,12 @@
       const body = el('div','body'); DATA.favorites.forEach(f=>body.appendChild(favRow(f)));
       d.appendChild(body); root.appendChild(d);
     }
-    buildTree().forEach(n=>root.appendChild(n.children.length ? renderNode(n) : emptyRootCard(n)));
+    (DATA.sections || []).forEach(section=>{
+      const sh = el('div','section-head'); sh.textContent = section.label; root.appendChild(sh);
+      const trees = buildSectionTree(section);
+      if (!trees.length){ const e = el('div','empty'); e.textContent = '(sin carpetas)'; root.appendChild(e); return; }
+      trees.forEach(n=>root.appendChild(n.children.length ? renderNode(n) : emptyRootCard(n)));
+    });
   }
 
   // ---- vista Comandos ----
@@ -421,7 +433,7 @@
     results.classList.remove('hidden'); results.textContent = '';
     const ql = q.toLowerCase();
     if (activeTab === 'rutas'){
-      const all = DATA.folders.filter(f=>f.name.toLowerCase().includes(ql) || f.rel.toLowerCase().includes(ql));
+      const all = (DATA.sections || []).flatMap(s=>s.folders).filter(f=>f.name.toLowerCase().includes(ql) || f.rel.toLowerCase().includes(ql));
       count.textContent = (all.length > CAP ? CAP + ' de ' : '') + all.length + ' carpetas';
       const frag = document.createDocumentFragment();
       all.slice(0, CAP).forEach(f=>frag.appendChild(flatRow(f, true)));
@@ -459,8 +471,8 @@
 
   // ---- init ----
   const meta = $('#meta');
-  meta.textContent = DATA.stats.folderCount + ' carpetas · act. ' + DATA.generatedAtHuman;
-  meta.title = DATA.driveRoot;
+  meta.textContent = DATA.stats.folderCount + ' carpetas · ' + DATA.stats.sectionCount + ' raíces · act. ' + DATA.generatedAtHuman;
+  meta.title = (DATA.sections || []).map(s=>s.label + ': ' + s.base).join('\n');
   $('#updateCmd').onclick = ()=>copyText('rutas-web', $('#updateCmd'));
   $('#updateCopy').onclick = ()=>copyText('rutas-web', $('#updateCopy'));
   if (location.protocol === 'http:' || location.protocol === 'https:'){
