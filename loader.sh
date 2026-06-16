@@ -25,3 +25,7 @@ export RUTAS_PORT="${RUTAS_PORT:-7777}"
 [ -f "$RUTAS_DIR/rutas.generated.sh" ] && . "$RUTAS_DIR/rutas.generated.sh"
 [ -f "$RUTAS_DIR/rutas.lib.sh" ]       && . "$RUTAS_DIR/rutas.lib.sh"
 [ -f "$RUTAS_DIR/custom-aliases.sh" ]  && . "$RUTAS_DIR/custom-aliases.sh"
+
+# Dir de arranque opcional: si RUTAS_START_DIR está definido (en rutas.config.sh) y la
+# terminal abre en $HOME, salta ahí. Vacío = $HOME (comportamiento estándar).
+[ -n "${RUTAS_START_DIR:-}" ] && [ -d "$RUTAS_START_DIR" ] && [ "$PWD" = "$HOME" ] && cd "$RUTAS_START_DIR"
