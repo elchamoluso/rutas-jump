@@ -32,9 +32,10 @@ export function CommandRow({ c }) {
       <TooltipTrigger delay={400}>
         <ActionButton
           isQuiet
+          UNSAFE_className="rutas-copybtn"
           onPress={() => copyText(c.cmd)}
           aria-label={'Copiar comando: ' + c.cmd}
-          UNSAFE_style={{ minWidth: 0, height: 22, paddingInline: 4, flexShrink: 0 }}
+          UNSAFE_style={{ minWidth: 0, height: 24, paddingInline: 7, flexShrink: 0 }}
         >
           <Copy />
         </ActionButton>

@@ -11,14 +11,14 @@ import { Flex, ActionButton, Text, TooltipTrigger, Tooltip } from '@adobe/react-
 import { copyText } from '../clipboard';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
-const BTN = { minWidth: 0, height: 22, paddingInline: 8 };
+const BTN = { minWidth: 0, height: 24, paddingInline: 11 };
 
 export default function RouteActions({ abs, aliases = [] }) {
   return (
-    <Flex direction="row" gap="size-65" wrap alignItems="center" UNSAFE_style={{ rowGap: 4 }}>
+    <Flex direction="row" gap="size-150" wrap alignItems="center" UNSAFE_style={{ rowGap: 6 }}>
       {aliases.map((a) => (
         <TooltipTrigger key={'alias:' + a} delay={400}>
-          <ActionButton isQuiet onPress={() => copyText(a)} aria-label={'Copiar alias ' + a} UNSAFE_style={BTN}>
+          <ActionButton isQuiet UNSAFE_className="rutas-copybtn" onPress={() => copyText(a)} aria-label={'Copiar alias ' + a} UNSAFE_style={BTN}>
             <Text UNSAFE_style={{ fontFamily: MONO, fontSize: '11.5px' }}>{a}</Text>
           </ActionButton>
           <Tooltip>Copiar alias «{a}»</Tooltip>
@@ -26,14 +26,14 @@ export default function RouteActions({ abs, aliases = [] }) {
       ))}
 
       <TooltipTrigger delay={400}>
-        <ActionButton isQuiet onPress={() => copyText(abs)} aria-label={'Copiar ruta absoluta: ' + abs} UNSAFE_style={BTN}>
+        <ActionButton isQuiet UNSAFE_className="rutas-copybtn" onPress={() => copyText(abs)} aria-label={'Copiar ruta absoluta: ' + abs} UNSAFE_style={BTN}>
           <Text UNSAFE_style={{ fontSize: '11.5px' }}>Copiar ruta</Text>
         </ActionButton>
         <Tooltip>{abs}</Tooltip>
       </TooltipTrigger>
 
       <TooltipTrigger delay={400}>
-        <ActionButton isQuiet onPress={() => copyText('cd "' + abs + '"')} aria-label={'Copiar comando cd a: ' + abs} UNSAFE_style={BTN}>
+        <ActionButton isQuiet UNSAFE_className="rutas-copybtn" onPress={() => copyText('cd "' + abs + '"')} aria-label={'Copiar comando cd a: ' + abs} UNSAFE_style={BTN}>
           <Text UNSAFE_style={{ fontSize: '11.5px' }}>cd</Text>
         </ActionButton>
         <Tooltip>cd "{abs}"</Tooltip>

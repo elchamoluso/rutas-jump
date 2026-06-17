@@ -34,6 +34,26 @@ export function injectAccentOverride() {
     --spectrum-accent-content-color-hover: var(--rutas-accent, #0070f3);
     --spectrum-accent-color-900: var(--rutas-accent, #0070f3);
     --spectrum-accent-color-1000: var(--rutas-accent, #0070f3);
+  }
+
+  /* Botones de copiado: "chips" con el color de acento para que se noten y se lean
+     como clicables-para-copiar. !important para ganar al CSS de Spectrum; el color
+     tiñe también el texto del alias y el icono Copy (SVG con fill currentColor). */
+  .rutas-copybtn {
+    --copy-accent: var(--rutas-accent, #0070f3);
+    border: 1px solid color-mix(in srgb, var(--copy-accent) 45%, transparent) !important;
+    background: color-mix(in srgb, var(--copy-accent) 12%, transparent) !important;
+    border-radius: 7px !important;
+    color: var(--copy-accent) !important;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .rutas-copybtn * { color: var(--copy-accent) !important; fill: var(--copy-accent) !important; }
+  .rutas-copybtn:hover {
+    background: color-mix(in srgb, var(--copy-accent) 22%, transparent) !important;
+    border-color: color-mix(in srgb, var(--copy-accent) 65%, transparent) !important;
+  }
+  .rutas-copybtn:active {
+    background: color-mix(in srgb, var(--copy-accent) 32%, transparent) !important;
   }`;
   const s = document.createElement('style');
   s.setAttribute('data-rutas-accent', '');
