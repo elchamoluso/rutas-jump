@@ -5,7 +5,7 @@
 // Render ESTÁTICO recursivo (TreeViewItem anidados): es el modo fiable para que Spectrum
 // marque las filas como expandibles. ~477 nodos rinden sin problema.
 import { useMemo, useState } from 'react';
-import { TreeView, TreeViewItem, TreeViewItemContent, Text, Badge, Flex } from '@adobe/react-spectrum';
+import { TreeView, TreeViewItem, TreeViewItemContent, Text, Flex, View } from '@adobe/react-spectrum';
 import Folder from '@spectrum-icons/workflow/Folder';
 import FolderOpen from '@spectrum-icons/workflow/FolderOpen';
 import Star from '@spectrum-icons/workflow/Star';
@@ -23,9 +23,32 @@ function renderNode(item) {
   return (
     <TreeViewItem key={item.id} id={item.id} textValue={item.name}>
       <TreeViewItemContent>
+        {/* El icono queda como hijo DIRECTO → Spectrum le da el slot `icon` y lo
+            mantiene en su columna, centrado contra el bloque de dos líneas. */}
         {iconFor(item)}
-        <Text>{label}</Text>
-        {item.abs ? <RouteActions abs={item.abs} aliases={item.aliases} /> : null}
+        {/* La fila es un GRID con áreas nombradas (… expand-button icon content actions …).
+            Un <Text slot="text"> recibiría la clase treeContent (grid-area:content), pero un
+            <Flex slot="text"> NO hereda esa clase y cae a la celda drag-handle (izquierda).
+            Por eso fijamos gridArea="content" explícito: la columna va a su sitio (tras el
+            icono) y dentro apilamos el nombre y, justo debajo, sus botones de copiado. */}
+        <Flex gridArea="content" direction="column" gap="size-50" minWidth="size-0" UNSAFE_style={{ paddingTop: 2, paddingBottom: 2 }}>
+          <Text
+            UNSAFE_style={{
+              lineHeight: 1.25,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '100%',
+            }}
+          >
+            {label}
+          </Text>
+          {item.abs ? (
+            <View UNSAFE_style={{ paddingInlineStart: 2 }}>
+              <RouteActions abs={item.abs} aliases={item.aliases} />
+            </View>
+          ) : null}
+        </Flex>
       </TreeViewItemContent>
       {(item.children || []).map((child) => renderNode(child))}
     </TreeViewItem>
