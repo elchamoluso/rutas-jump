@@ -20,11 +20,15 @@ sus raíces en `rutas.config.sh` con líneas `RUTAS_ROOT_N="etiqueta|path|prefij
 | `loader.sh` | Punto de entrada que sourcea el rc: config → aliases → lib → custom | Estable |
 | `regenerate-rutas.sh` | Escanea `RUTAS_BASE` y reescribe `rutas.generated.sh` (escritura atómica) | Estable |
 | `rutas.generated.sh` | Aliases `cd-*` autogenerados (raíz + nivel 2) | **Autogenerado** · gitignored |
-| `rutas.lib.sh` | Funciones: `rutas-web`, `rutas-web-stop`, `rutas-web-build`, `rutas-help`, `rutas-refresh` | Estable |
+| `rutas.lib.sh` | Funciones: `rutas-web`, `rutas-web-stop`, `rutas-web-build`, `rutas-web-rebuild`, `rutas-help`, `rutas-refresh` | Estable |
 | `custom-aliases.sh` | Atajos personales del usuario (override de los autogenerados) | Manual · **gitignored** |
-| `generate-dashboard.js` | Escanea base + parsea aliases + comandos → `dashboard.html` (Node, cero deps) | Estable |
-| `serve-dashboard.js` | Sirve `dashboard.html` por HTTP (Node, cero deps) | Estable |
-| `dashboard.template.html` | Plantilla UI (placeholder `/*__DATA__*/`) | Editar para cambiar la UI |
+| `generate-dashboard.js` | Inyecta datos (`window.DATA`) + el bundle commiteado en la plantilla → `dashboard.html` (Node, **runtime sin npm**) | Estable |
+| `serve-dashboard.js` | Sirve `dashboard.html` por HTTP (Node, runtime sin npm) | Estable |
+| `dashboard.template.html` | Shell mínimo: `#root` + markers `/*__DATA__*/` y `/*__BUNDLE__*/` | Raramente |
+| `src/` | **UI React + Adobe React Spectrum** (App, Sidebar, RutasView, ComandosView…) | **Editar para cambiar la UI** |
+| `build.js` | esbuild: `src/` → `ui/dashboard.bundle.js` (CSS de Spectrum inline) | Build-time |
+| `ui/dashboard.bundle.js` | Bundle React precompilado y **VERSIONADO** (lo que se sirve) | **Compilado · `npm run build`** |
+| `package.json` | Deps build-time (react, @adobe/react-spectrum, esbuild) | Build-time |
 | `commands.json` | Comandos/secciones copiables del dashboard | Manual |
 | `dashboard.html` | Salida generada autocontenida | **Autogenerado** · gitignored |
 
@@ -66,17 +70,31 @@ prefijo → `cd-<prefijo>-<root>[-<sub>]` (p.ej. `cd-sd-lusomagnet`, `cd-home-de
 
 ## Dashboard web
 
-`generate-dashboard.js` escanea la base, parsea los aliases de `rutas.generated.sh` +
-`custom-aliases.sh`, lee `commands.json` y el branding de `rutas.config.sh`, inyecta todo en
-`dashboard.template.html` y escribe `dashboard.html` de forma atómica. `serve-dashboard.js` lo sirve
-por HTTP (en ChromeOS es imprescindible: el Chrome del host no abre `file://` del contenedor Linux).
+La UI es una app **React + Adobe React Spectrum** (en `src/`) compilada con esbuild a un único bundle
+autocontenido `ui/dashboard.bundle.js` (todo el CSS de Spectrum va inline; offline, sin CDN). Hay una
+separación deliberada **build-time vs scan-time** que preserva la portabilidad:
 
-- **Abrir:** `rutas-web` (regenera, sirve y abre el navegador). `rutas-web-stop` detiene; `rutas-web-build` solo regenera.
-- **Botón "Actualizar ahora":** visible al servir por HTTP; llama a `GET /api/regenerate` y recarga.
+- **Build-time (solo máquina de dev, requiere npm):** `npm run build` (o `rutas-web-rebuild`) compila
+  `src/` → `ui/dashboard.bundle.js`. **Ese bundle se COMMITEA al repo.**
+- **Scan-time (toda máquina, solo node):** `generate-dashboard.js` escanea la base, parsea los aliases
+  de `rutas.generated.sh` + `custom-aliases.sh`, lee `commands.json` + branding, e inyecta `window.DATA`
+  y el **bundle commiteado** en `dashboard.template.html` → `dashboard.html` (atómico). **Nunca corre
+  npm/esbuild**, así que cron/`rutas-refresh`/`rutas-web` funcionan con solo node.
 
-**Para AIs:** si creas/borras/renombras carpetas o editas `commands.json`, ejecuta
-`node "$RUTAS_DIR/generate-dashboard.js"` para reflejarlo. Edita la UI en `dashboard.template.html`,
-nunca en `dashboard.html` (se sobrescribe).
+Cada **raíz** (`RUTAS_ROOT_*`) se renderiza como un **nodo de primer nivel** del árbol con su alias de
+raíz (`cd-drive`/`cd-sd`/…). Ese alias sale de `aliasByPath[section.base]`; por eso el regex de
+`parseAliases` en `generate-dashboard.js` admite subpath **opcional** (reconoce los `cd-*` a la raíz).
+No lo rompas.
+
+- **Abrir:** `rutas-web` (regenera, sirve, abre). `rutas-web-stop` detiene; `rutas-web-build` solo
+  regenera (node); `rutas-web-rebuild` recompila el bundle (npm, solo dev).
+
+**Para AIs — REGLA CRÍTICA:**
+- Si creas/borras/renombras carpetas o editas `commands.json` → `node "$RUTAS_DIR/generate-dashboard.js"`.
+- Para cambiar la **UI**: edita `src/`, luego **recompila** (`npm run build` / `rutas-web-rebuild`) **y
+  commitea `ui/dashboard.bundle.js`**. Editar `src/` sin recompilar NO cambia nada (el dashboard inyecta
+  el bundle commiteado).
+- **Nunca** edites a mano `dashboard.html` (generado) ni `ui/dashboard.bundle.js` (compilado).
 
 ## Mantener actualizado (opcional)
 

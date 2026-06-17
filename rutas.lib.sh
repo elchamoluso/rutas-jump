@@ -43,3 +43,14 @@ rutas-web-build() {
     command -v node >/dev/null 2>&1 || { echo "✗ node no está instalado" >&2; return 1; }
     node "$RUTAS_DIR/generate-dashboard.js"
 }
+
+# rutas-web-rebuild — SOLO para desarrollar la UI (requiere npm, build-time).
+# Recompila el bundle React Spectrum (ui/dashboard.bundle.js) desde src/ y regenera
+# el dashboard. El uso normal (rutas-web / rutas-web-build / cron) NO necesita npm:
+# basta el bundle ya commiteado. Tras recompilar, recuerda commitear el bundle.
+rutas-web-rebuild() {
+    command -v npm >/dev/null 2>&1 || { echo "✗ npm no está instalado (solo hace falta para desarrollar la UI)" >&2; return 1; }
+    ( cd "$RUTAS_DIR" && npm install && npm run build ) || return 1
+    echo "✓ ui/dashboard.bundle.js recompilado — recuerda: git add ui/dashboard.bundle.js && git commit"
+    node "$RUTAS_DIR/generate-dashboard.js"
+}

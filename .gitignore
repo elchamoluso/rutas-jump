@@ -18,6 +18,16 @@ dashboard.html.tmp
 .claude/
 node_modules/
 
+# --- Bundle React Spectrum prebuild (SÍ se versiona; el runtime node-only depende de él) ---
+# node_modules y dist/ están ignorados, pero ui/dashboard.bundle.js es el artefacto
+# COMMITEADO que generate-dashboard.js inyecta en cada máquina sin necesidad de npm.
+!ui/dashboard.bundle.js
+
+# El ~/.gitignore_global del usuario ignora *.json; forzamos los manifest de build
+# (necesarios para que un contribuidor pueda `npm install && npm run build`).
+!package.json
+!package-lock.json
+
 # --- Backups del instalador ---
 *.rutasjump.bak
 *.drivejump.bak

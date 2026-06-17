@@ -113,6 +113,9 @@ const OUT = path.join(SCRIPT_DIR, 'dashboard.html');
 const OUT_TMP = OUT + '.tmp';
 const GENERATED_SH = path.join(SCRIPT_DIR, 'rutas.generated.sh');
 const CUSTOM_SH = path.join(SCRIPT_DIR, 'custom-aliases.sh');
+// Bundle React Spectrum PREBUILD y COMMITEADO. generate-dashboard.js solo lo INYECTA
+// (node-only); se reconstruye en la máquina de dev con `npm run build` (build.js).
+const BUNDLE = path.join(SCRIPT_DIR, 'ui', 'dashboard.bundle.js');
 
 // ---------------- helpers ----------------
 function shouldSkip(name) {
@@ -158,13 +161,16 @@ function scanBase(root) {
 function parseAliases(file, baseByVar) {
   let txt;
   try { txt = fs.readFileSync(file, 'utf8'); } catch (e) { return []; }
-  const re = /alias\s+(cd-[\w-]+)='cd\s+"\$(DRIVE[A-Z0-9_]*)\/([^"]+)"'/g;
+  // El subpath es OPCIONAL: así los atajos a la RAÍZ de una sección (cd "$DRIVE")
+  // también se reconocen y pueden salir como favoritos, no solo los de subcarpeta.
+  const re = /alias\s+(cd-[\w-]+)='cd\s+"\$(DRIVE[A-Z0-9_]*)(?:\/([^"]+))?"'/g;
   const res = [];
   let m;
   while ((m = re.exec(txt)) !== null) {
     const base = baseByVar[m[2]];
     if (!base) continue;
-    res.push({ alias: m[1], rel: m[3], abs: path.join(base, m[3]) });
+    const sub = m[3] || '';
+    res.push({ alias: m[1], rel: sub, abs: sub ? path.join(base, sub) : base });
   }
   return res;
 }
@@ -199,7 +205,7 @@ for (const a of parseAliases(CUSTOM_SH, baseByVar)) {
   favSeen.add(a.alias);
   let exists = false;
   try { exists = fs.statSync(a.abs).isDirectory(); } catch (e) {}
-  if (exists) favorites.push({ alias: a.alias, rel: a.rel, abs: a.abs });
+  if (exists) favorites.push({ alias: a.alias, rel: a.rel || '(raíz)', abs: a.abs });
 }
 favorites.sort((x, y) => x.alias.localeCompare(y.alias));
 
@@ -240,11 +246,35 @@ const json = JSON.stringify(DATA)
   .replace(new RegExp('\\u2028', 'g'), '\\u2028')
   .replace(new RegExp('\\u2029', 'g'), '\\u2029');
 
+// 1) Inyección del DATA (mismo marcador y escaping de siempre). Como global window.DATA
+//    para que la app React lo lea al arrancar.
 if (tpl.indexOf('/*__DATA__*/') === -1) {
   console.error('ERROR: la plantilla no contiene el marcador /*__DATA__*/');
   process.exit(1);
 }
-const html = tpl.replace('/*__DATA__*/', () => 'const DATA = ' + json + ';');
+let html = tpl.replace('/*__DATA__*/', () => 'window.DATA = ' + json + ';');
+
+// 2) Inyección del bundle React Spectrum PREBUILD y COMMITEADO. Degradación elegante:
+//    si falta, error claro (no un HTML roto). El scan-time sigue siendo node-only:
+//    aquí solo se LEE un archivo versionado, nunca se ejecuta npm/esbuild.
+if (tpl.indexOf('/*__BUNDLE__*/') === -1) {
+  console.error('ERROR: la plantilla no contiene el marcador /*__BUNDLE__*/');
+  process.exit(1);
+}
+let bundle;
+try { bundle = fs.readFileSync(BUNDLE, 'utf8'); }
+catch (e) {
+  console.error('ERROR: falta el bundle de la UI:', BUNDLE);
+  console.error('  Es un artefacto versionado en el repo. Si editaste src/, recompílalo:');
+  console.error('    npm install   (una sola vez)');
+  console.error('    npm run build   (o: rutas-web-rebuild)');
+  console.error('  En una máquina sin npm, basta `git pull` para traerlo ya compilado.');
+  process.exit(1);
+}
+// El bundle es código local de confianza; solo neutralizamos un </script> literal que
+// pudiera venir dentro de un string CSS inlineado, para no cerrar el <script> antes de tiempo.
+const bundleSafe = bundle.replace(/<\/script>/gi, '<\\/script>');
+html = html.replace('/*__BUNDLE__*/', () => bundleSafe);
 
 // Escritura atómica (tmp + rename), igual patrón que regenerate-rutas.sh
 fs.writeFileSync(OUT_TMP, html);

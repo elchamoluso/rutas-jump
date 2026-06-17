@@ -13,8 +13,9 @@ Pensado para quien trabaja con un Drive grande y no quiere memorizar comandos qu
 cada vez que reorganiza sus carpetas — y para quien no se siente cómodo navegando carpetas a mano
 en la terminal.
 
-> Cross-platform: **ChromeOS (Crostini) · macOS · Linux**. Cero dependencias (solo `bash` y, para
-> el dashboard, `node`).
+> Cross-platform: **ChromeOS (Crostini) · macOS · Linux**. **Runtime sin dependencias**: solo `bash`
+> y, para el dashboard, `node` — el bundle de la UI viene **precompilado y versionado** en el repo.
+> (Solo para *desarrollar* la UI hace falta `npm`; ver [Desarrollar la UI](#-desarrollar-la-ui).)
 
 ---
 
@@ -24,8 +25,10 @@ en la terminal.
   `cd-drive` te lleva a la raíz; `cd-proyectos-cliente` a `proyectos/cliente`.
 - **Se regeneran solos** — al crear/mover/renombrar carpetas, `rutas-refresh` (o un cron) actualiza
   los atajos. Nunca memorizas una ruta que va a cambiar.
-- **Dashboard web local** — árbol plegable de tus carpetas, ⭐ favoritos, buscador instantáneo y
-  botones *Copiar ruta* / *cd* en cada carpeta. Diseño limpio con tema claro/oscuro automático.
+- **Dashboard web local** — UI en **Adobe React Spectrum**. Cada **raíz** (My Drive · Unidades
+  Compartidas · Home) es un **nodo de primer nivel** del árbol, con su alias (`cd-drive`/`cd-sd`/…)
+  y botones *Copiar ruta* / *cd*, que se expande a su árbol de carpetas. ⭐ favoritos, buscador
+  instantáneo, tema claro/oscuro y color de acento configurable. Un único HTML autocontenido y offline.
 - **Directorio de comandos** — secciones de comandos copiables (Claude Code, git, etc.), totalmente
   configurables por ti.
 - **Configurable** — tu carpeta base, puerto y branding (título, emoji, color) en un solo archivo.
@@ -118,11 +121,32 @@ Ejecuta `rutas-web` (o `rutas-web-build`) para reflejarlo.
 |---|---|
 | `rutas-web` | Regenera, sirve y abre el dashboard en el navegador |
 | `rutas-web-stop` | Detiene el servidor |
-| `rutas-web-build` | Solo regenera el HTML (sin servir) |
+| `rutas-web-build` | Solo regenera el HTML (sin servir) — **solo node** |
+| `rutas-web-rebuild` | Recompila el bundle React Spectrum desde `src/` — **solo para desarrollar la UI (requiere npm)** |
 
 Se sirve por `http://localhost:7777` (en ChromeOS también `http://penguin.linux.test:7777`).
 Se sirve por HTTP porque el navegador del host de ChromeOS no puede abrir `file://` del contenedor
 Linux; en macOS/Linux funciona igual. Requiere `node` (cualquier versión reciente).
+
+---
+
+## 🎨 Desarrollar la UI
+
+La interfaz del dashboard es una app **React + Adobe React Spectrum** en `src/`. Se compila con
+**esbuild** a un único bundle autocontenido `ui/dashboard.bundle.js` (todo el CSS de Spectrum va
+inline; cero CDN, 100 % offline). **Ese bundle se versiona en el repo**: por eso el uso normal solo
+necesita `node` — `generate-dashboard.js` se limita a inyectar el bundle commiteado + los datos del
+escaneo (`window.DATA`) en `dashboard.template.html`.
+
+```bash
+npm install        # una sola vez (trae react + @adobe/react-spectrum + esbuild)
+npm run build      # recompila ui/dashboard.bundle.js   (o: rutas-web-rebuild)
+npm run build:watch  # rebuild incremental mientras editas src/
+```
+
+Tras tocar `src/`, **recompila y commitea `ui/dashboard.bundle.js`** — editar `src/` sin recompilar
+no cambia nada (el dashboard usa el bundle commiteado). Nunca edites `dashboard.html` (generado) ni
+`ui/dashboard.bundle.js` (compilado) a mano.
 
 ---
 
@@ -155,9 +179,13 @@ install.sh              Instalador cross-platform
 loader.sh               Punto de entrada (lo sourcea tu shell rc)
 regenerate-rutas.sh     Escanea la base → genera los aliases cd-*
 rutas.lib.sh            Funciones (rutas-web, rutas-help, rutas-refresh…)
-generate-dashboard.js   Genera el dashboard.html (Node, cero deps)
-serve-dashboard.js      Sirve el dashboard por HTTP (Node, cero deps)
-dashboard.template.html UI del dashboard (diseño + tema claro/oscuro)
+generate-dashboard.js   Inyecta datos + bundle en dashboard.html (Node, runtime sin npm)
+serve-dashboard.js      Sirve el dashboard por HTTP (Node, runtime sin npm)
+dashboard.template.html Shell mínimo: #root + markers /*__DATA__*/ y /*__BUNDLE__*/
+src/                    UI React + React Spectrum (edítala aquí)
+build.js                esbuild: src/ → ui/dashboard.bundle.js (build-time, npm)
+ui/dashboard.bundle.js  Bundle precompilado y VERSIONADO (lo que realmente se sirve)
+package.json            Deps build-time (react, @adobe/react-spectrum, esbuild)
 commands.json           Secciones de comandos copiables (edítalo)
 rutas.config.example.sh Plantilla de configuración
 custom-aliases.example.sh Plantilla de atajos personales
