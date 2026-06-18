@@ -11,12 +11,12 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 // (igual que en el árbol, para que se lean como un mismo bloque).
 export function FolderRow({ row }) {
   return (
-    <Flex alignItems="start" gap="size-150" UNSAFE_style={{ padding: '6px 4px' }}>
+    <Flex alignItems="start" gap="size-150" UNSAFE_style={{ padding: '8px 4px' }}>
       <Folder aria-label="carpeta" size="S" />
       <Flex direction="column" gap="size-50" flex minWidth="size-0">
         <Text>{row.name}</Text>
         <Text UNSAFE_style={{ fontSize: '12px', opacity: 0.7 }}>{row.section} · {row.rel}</Text>
-        <View UNSAFE_style={{ paddingInlineStart: 2 }}>
+        <View UNSAFE_style={{ paddingInlineStart: 2, paddingTop: 6, borderTop: '1px solid var(--spectrum-gray-200, rgba(128,128,128,0.18))' }}>
           <RouteActions abs={row.abs} aliases={row.aliases} />
         </View>
       </Flex>
@@ -28,20 +28,20 @@ export function FolderRow({ row }) {
 // obvio qué se copia al clicar.
 export function CommandRow({ c }) {
   return (
-    <Flex alignItems="start" gap="size-100" UNSAFE_style={{ padding: '6px 4px' }}>
+    <Flex alignItems="start" gap="size-100" UNSAFE_style={{ padding: '8px 4px' }}>
       <TooltipTrigger delay={400}>
         <ActionButton
           isQuiet
           UNSAFE_className="rutas-copybtn"
           onPress={() => copyText(c.cmd)}
           aria-label={'Copiar comando: ' + c.cmd}
-          UNSAFE_style={{ minWidth: 0, height: 24, paddingInline: 7, flexShrink: 0 }}
+          UNSAFE_style={{ minWidth: 0, height: 28, paddingInline: 10, flexShrink: 0 }}
         >
           <Copy />
         </ActionButton>
         <Tooltip>Copiar «{c.cmd}»</Tooltip>
       </TooltipTrigger>
-      <Flex direction="column" gap="size-25" flex minWidth="size-0">
+      <Flex direction="column" gap="size-50" flex minWidth="size-0">
         <Text UNSAFE_style={{ fontFamily: MONO, fontSize: '12.5px', lineHeight: '22px' }}>{c.cmd}</Text>
         {c.desc ? <Text UNSAFE_style={{ fontSize: '12px', opacity: 0.7 }}>{c.desc}</Text> : null}
       </Flex>

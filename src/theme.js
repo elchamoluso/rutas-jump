@@ -36,6 +36,16 @@ export function injectAccentOverride() {
     --spectrum-accent-color-1000: var(--rutas-accent, #0070f3);
   }
 
+  /* Altura de fila del árbol: Spectrum fija cada fila del TreeView a 40px, lo que
+     APRETABA el nombre + sus botones (y, al darles aire, se solapaban). El árbol se
+     renderiza estático (sin virtualización: filas en flujo normal, position:relative),
+     así que dejar la fila crecer a su contenido es seguro y empuja a las siguientes.
+     Acotado al treegrid para no tocar las filas planas (búsqueda/comandos). */
+  .rutas-root [role="treegrid"] [role="row"] {
+    height: auto !important;
+    min-height: var(--spectrum-global-dimension-size-500, 40px);
+  }
+
   /* Botones de copiado: "chips" con el color de acento para que se noten y se lean
      como clicables-para-copiar. !important para ganar al CSS de Spectrum; el color
      tiñe también el texto del alias y el icono Copy (SVG con fill currentColor). */
@@ -45,6 +55,7 @@ export function injectAccentOverride() {
     background: color-mix(in srgb, var(--copy-accent) 12%, transparent) !important;
     border-radius: 7px !important;
     color: var(--copy-accent) !important;
+    font-weight: 500;
     transition: background 120ms ease, border-color 120ms ease;
   }
   .rutas-copybtn * { color: var(--copy-accent) !important; fill: var(--copy-accent) !important; }

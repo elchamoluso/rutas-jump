@@ -22,7 +22,7 @@ export default function ComandosView({ data }) {
                 <a href={cat.source} target="_blank" rel="noopener noreferrer">📖 Documentación oficial</a>
               </Link>
             ) : null}
-            <Flex direction="column">
+            <Flex direction="column" gap="size-100">
               {(cat.commands || []).map((c, j) => (
                 <CommandRow key={j} c={c} />
               ))}

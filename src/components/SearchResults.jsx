@@ -17,7 +17,7 @@ export default function SearchResults({ data, query, view }) {
   }
 
   return (
-    <Flex direction="column" gap="size-50">
+    <Flex direction="column" gap="size-100">
       <Text UNSAFE_style={{ fontSize: '12px', opacity: 0.7, marginBottom: 4 }}>
         {rows.length}{capped ? '+' : ''} resultado{rows.length === 1 ? '' : 's'} en {isCmd ? 'comandos' : 'rutas'}
         {capped ? ` (tope ${SEARCH_CAP}, afina la búsqueda)` : ''}

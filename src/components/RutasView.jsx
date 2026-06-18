@@ -20,6 +20,10 @@ function iconFor(item) {
 
 function renderNode(item) {
   const label = typeof item.count === 'number' ? `${item.name}  ·  ${item.count}` : item.name;
+  // Las raíces (My Drive · Unidades Compartidas · Home) se distinguen como cabeceras:
+  // texto en negrita y más grande, más aire arriba/abajo, y sin la línea divisoria
+  // (no la necesitan porque ya destacan por peso/tamaño).
+  const isRoot = item.kind === 'section';
   return (
     <TreeViewItem key={item.id} id={item.id} textValue={item.name}>
       <TreeViewItemContent>
@@ -31,7 +35,7 @@ function renderNode(item) {
             <Flex slot="text"> NO hereda esa clase y cae a la celda drag-handle (izquierda).
             Por eso fijamos gridArea="content" explícito: la columna va a su sitio (tras el
             icono) y dentro apilamos el nombre y, justo debajo, sus botones de copiado. */}
-        <Flex gridArea="content" direction="column" gap="size-50" minWidth="size-0" UNSAFE_style={{ paddingTop: 2, paddingBottom: 2 }}>
+        <Flex gridArea="content" direction="column" gap="size-100" minWidth="size-0" UNSAFE_style={{ paddingTop: isRoot ? 12 : 8, paddingBottom: isRoot ? 12 : 8 }}>
           <Text
             UNSAFE_style={{
               lineHeight: 1.25,
@@ -39,12 +43,14 @@ function renderNode(item) {
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               maxWidth: '100%',
+              fontWeight: isRoot ? 700 : 400,
+              fontSize: isRoot ? '15px' : undefined,
             }}
           >
             {label}
           </Text>
           {item.abs ? (
-            <View UNSAFE_style={{ paddingInlineStart: 2 }}>
+            <View UNSAFE_style={{ paddingInlineStart: 2, paddingTop: 6, borderTop: isRoot ? 'none' : '1px solid var(--spectrum-gray-200, rgba(128,128,128,0.18))' }}>
               <RouteActions abs={item.abs} aliases={item.aliases} />
             </View>
           ) : null}
