@@ -68,7 +68,7 @@ if (mdIdx !== -1 && process.argv[mdIdx + 1]) {
 }
 
 // --- Raíces múltiples: RUTAS_ROOT_N="etiqueta|path|prefijo|maxdepth|filtro" ---
-// filtro: "" (escanea todo el nivel 1) | "whitelist:a,b" (solo esas carpetas de nivel 1)
+// filtro: "" (escanea todo el nivel 1) | "whitelist:a,b" (solo esas) | "blacklist:a,b" (todas menos esas)
 // prefijo: vacío = My Drive (alias sin prefijo, var $DRIVE) · "sd"/"home" = prefijo de alias + var $DRIVE_SD/$DRIVE_HOME
 function parseRoots(cfg) {
   const keys = Object.keys(cfg).filter(k => /^RUTAS_ROOT_\d+$/.test(k))
@@ -90,6 +90,8 @@ function parseRoots(cfg) {
       maxdepth: (!isNaN(mdn) && mdn > 0) ? mdn : MAX_DEPTH,
       whitelist: filter.startsWith('whitelist:')
         ? filter.slice('whitelist:'.length).split(',').map(s => s.trim()).filter(Boolean) : null,
+      blacklist: filter.startsWith('blacklist:')
+        ? filter.slice('blacklist:'.length).split(',').map(s => s.trim()).filter(Boolean) : null,
     });
   }
   return roots;
@@ -135,6 +137,7 @@ function scanBase(root) {
   const rootNames = level1
     .filter(d => d.isDirectory() && !shouldSkip(d.name))
     .filter(d => !root.whitelist || root.whitelist.includes(d.name))
+    .filter(d => !root.blacklist || !root.blacklist.includes(d.name))
     .map(d => d.name)
     .sort();
   for (const rn of rootNames) {

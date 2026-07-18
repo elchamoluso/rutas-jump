@@ -3,7 +3,7 @@
 # con los aliases cd-* actualizados. Cross-platform (ChromeOS, macOS, Linux).
 #
 # Las raíces se leen de rutas.config.sh:
-#   RUTAS_ROOT_N="etiqueta|path|prefijo|maxdepth|filtro"   (filtro: "" | "whitelist:a,b")
+#   RUTAS_ROOT_N="etiqueta|path|prefijo|maxdepth|filtro"   (filtro: "" | "whitelist:a,b" | "blacklist:a,b")
 # Retro-compat: si no hay RUTAS_ROOT_*, se usa RUTAS_BASE como raíz única (sin prefijo).
 # Ejecutar:  bash regenerate-rutas.sh      ·      o vía función:  rutas-refresh
 set -e
@@ -109,8 +109,11 @@ trap 'rm -f "$TMP"' EXIT
         [ -d "$r_base" ] || continue
         var="$(var_for_prefix "$r_prefix")"
         if [ -z "$r_prefix" ]; then aprefix=""; else aprefix="${r_prefix}-"; fi
-        wl=""
-        case "$r_filter" in whitelist:*) wl="${r_filter#whitelist:}" ;; esac
+        wl=""; bl=""
+        case "$r_filter" in
+            whitelist:*) wl="${r_filter#whitelist:}" ;;
+            blacklist:*) bl="${r_filter#blacklist:}" ;;
+        esac
 
         echo ""
         echo "# === ${r_label} ==="
@@ -126,6 +129,7 @@ trap 'rm -f "$TMP"' EXIT
             root_name=$(basename "$root")
             should_skip "$root_name" && continue
             [ -n "$wl" ] && { in_csv "$root_name" "$wl" || continue; }
+            [ -n "$bl" ] && { in_csv "$root_name" "$bl" && continue; }
             alias_root=$(normalize "$root_name")
             [ -z "$alias_root" ] && continue
             emit_alias "cd-${aprefix}${alias_root}" "$var" "$(esc_dq "$root_name")"

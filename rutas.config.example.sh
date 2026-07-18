@@ -14,7 +14,7 @@
 #              vacío  → My Drive: alias sin prefijo (cd-<carpeta>) y var $DRIVE  (compat).
 #              "sd"   → alias cd-sd-* y var $DRIVE_SD.   "home" → cd-home-* y $DRIVE_HOME.
 #   maxdepth : profundidad de escaneo del dashboard (los alias cd-* siempre son nivel 1-2).
-#   filtro   : ""  (escanea todo el nivel 1)  |  "whitelist:dev,secrets" (solo esas carpetas).
+#   filtro   : ""  (escanea todo el nivel 1)  |  "whitelist:dev,secrets" (solo esas)  |  "blacklist:LusoMagnet" (todas menos esas).
 #
 # Ejemplo ChromeOS/Crostini (este equipo):
 RUTAS_ROOT_1="My Drive|/mnt/chromeos/GoogleDrive/MyDrive||40|"
