@@ -74,6 +74,46 @@ export function buildRutasTree(data) {
   return items;
 }
 
+// ---------------- comando de arranque ----------------
+
+// Cita para bash con comillas SIMPLES. Dentro de comillas DOBLES una ruta con `!` se expande
+// en silencio (histexpand está on en bash interactivo) y te llevaría a otro sitio sin avisar;
+// `$` y las backticks también se interpretan. Con simples solo hay que escapar la comilla,
+// con el idioma estándar '\'' — y queda inmune a todo lo demás.
+export function shellQuote(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'";
+}
+
+// Ámbito de la bóveda que hay que desbloquear para que la CLI vea sus tokens, o null si no hace
+// falta: bóveda ya abierta, o este entorno no usa ninguna (`ambito` vacío / sin bóveda instalada).
+// Fail-safe: un estado que no sea 'abierta' —incluido 'desconocido'— pide el unlock. Sobrar
+// el prefijo cuesta teclear el PIN de más; faltar cuesta arrancar sin tokens y no enterarte.
+export function ambitoPendiente(ambito, vault) {
+  if (!ambito || !vault || !vault.instalada) return null;
+  const a = (vault.ambitos || []).find((x) => x.ambito === ambito);
+  if (!a) return null;
+  return a.estado === 'abierta' ? null : ambito;
+}
+
+// El comando completo de una carpeta para la CLI activa. UNA sola línea y sin salto final:
+// un \n haría que el terminal lo EJECUTE al pegarlo, con los flags peligrosos dentro.
+export function buildCommand({ cli, modo, toggles, abs, vault, ambito }) {
+  if (!cli || !abs) return '';
+  const partes = [];
+  const amb = ambitoPendiente(ambito, vault);
+  if (amb) partes.push('llave unlock ' + amb + ' &&');
+  partes.push('cd ' + shellQuote(abs) + ' &&');
+  partes.push(cli.bin);
+  // El modo va INMEDIATAMENTE tras el binario: en codex es un subcomando ('resume --last'),
+  // no una bandera, y los subcomandos no admiten flags por delante.
+  const m = (cli.modos || []).find((x) => x.id === modo);
+  if (m && m.args) partes.push(m.args);
+  for (const t of cli.toggles || []) {
+    if ((toggles || []).includes(t.id) && t.args) partes.push(t.args);
+  }
+  return partes.join(' ');
+}
+
 export const SEARCH_CAP = 500;
 
 // Búsqueda de carpetas (port de runSearch, rama rutas): match en nombre o rel.

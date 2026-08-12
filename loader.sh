@@ -5,7 +5,7 @@
 # Orden de carga:
 #   1) rutas.config.sh        → tu configuración (RUTAS_BASE, RUTAS_PORT, branding)
 #   2) rutas.generated.sh     → aliases cd-* autogenerados (export DRIVE + cd-*)
-#   3) rutas.lib.sh           → funciones de la herramienta (rutas-web, rutas-help…)
+#   3) rutas.lib.sh           → funciones de la herramienta (rutas-jump, rutas-help…)
 #   4) custom-aliases.sh      → tus atajos personales (opcional)
 
 # Carpeta del repo. install.sh exporta RUTAS_DIR en el rc; si no, se autodetecta.

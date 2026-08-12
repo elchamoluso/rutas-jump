@@ -2,6 +2,7 @@
 rutas.config.sh
 rutas.generated.sh
 custom-aliases.sh
+commands.local.json
 
 # Compat: artefactos del sistema antiguo (por si quedan en algún clon)
 rutas.sh

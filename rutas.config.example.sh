@@ -33,6 +33,26 @@ RUTAS_BASE="$HOME"
 # Vacío = $HOME (comportamiento estándar). Pon una ruta para abrir siempre ahí.
 RUTAS_START_DIR=""
 
+# --- Bóveda de credenciales (OPCIONAL, según el entorno) ---------------------
+# Déjalo VACÍO si esta máquina no cifra sus credenciales: el dashboard se comporta como un
+# dashboard de rutas normal, sin nota ni prefijos.
+#
+# Si SÍ las cifra —p.ej. con `llave` (github.com/elchamoluso/llave-usb), que guarda los tokens
+# en un pendrive + PIN y los descifra a RAM— pon aquí el ÁMBITO que hay que abrir. Entonces:
+#
+#   1. El dashboard consulta el estado real de la bóveda (GET /api/llave) y muestra una nota
+#      arriba: abierta, cerrada, sin pendrive, o con credenciales sin cifrar en el disco.
+#   2. Mientras ese ámbito no esté abierto, el comando que copias de cada carpeta llega ya con
+#      el desbloqueo delante, porque las CLIs leen sus tokens AL ARRANCAR:
+#
+#        llave unlock personal && cd '/ruta/al/proyecto' && claude -c
+#
+#      Si el unlock falla, el `&&` corta y la CLI no arranca a ciegas sin credenciales.
+#      El PIN se teclea en tu terminal: la app nunca lo pide ni lo toca.
+#
+# Es propiedad de la MÁQUINA, no de cada CLI, por eso vive aquí y no en launchers.json.
+RUTAS_LLAVE_AMBITO=""
+
 # --- Puerto del dashboard web local ------------------------------------------
 RUTAS_PORT="7777"
 

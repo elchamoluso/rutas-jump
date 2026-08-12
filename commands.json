@@ -1,5 +1,5 @@
 {
-  "_comment": "Comandos copiables del dashboard. Verificados contra docs oficiales (2026-06) y los binarios locales. Edita libremente: añade categorías o comandos y ejecuta rutas-web para reflejarlo. Cada categoría puede tener 'icon' y 'source' (enlace a docs oficiales).",
+  "_comment": "Comandos copiables del dashboard. Verificados contra docs oficiales (2026-06) y los binarios locales. Edita libremente: añade categorías o comandos y ejecuta rutas-jump para reflejarlo. Cada categoría puede tener 'icon' y 'source' (enlace a docs oficiales).",
   "categories": [
     {
       "name": "Claude Code",

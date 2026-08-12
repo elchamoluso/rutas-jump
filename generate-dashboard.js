@@ -7,7 +7,7 @@
  *
  * Uso:        node generate-dashboard.js [--max-depth N]
  * Cron:       lo llama regenerate-rutas.sh tras regenerar rutas.generated.sh.
- * On-demand:  el comando `rutas-web` regenera y abre el dashboard.
+ * On-demand:  el comando `rutas-jump` regenera y abre el dashboard.
  */
 'use strict';
 const fs = require('fs');
@@ -111,6 +111,10 @@ if (!ROOTS.length) {
 
 const TEMPLATE = path.join(SCRIPT_DIR, 'dashboard.template.html');
 const COMMANDS_FILE = path.join(SCRIPT_DIR, 'commands.json');
+// Secciones de comandos propias de ESTA máquina (gitignored). Se fusionan con las del repo:
+// así el proyecto se publica genérico y cada entorno añade lo suyo sin tocar commands.json.
+const COMMANDS_LOCAL_FILE = path.join(SCRIPT_DIR, 'commands.local.json');
+const LAUNCHERS_FILE = path.join(SCRIPT_DIR, 'launchers.json');
 const OUT = path.join(SCRIPT_DIR, 'dashboard.html');
 const OUT_TMP = OUT + '.tmp';
 const GENERATED_SH = path.join(SCRIPT_DIR, 'rutas.generated.sh');
@@ -216,7 +220,23 @@ favorites.sort((x, y) => x.alias.localeCompare(y.alias));
 let commands = { categories: [] };
 try { commands = JSON.parse(fs.readFileSync(COMMANDS_FILE, 'utf8')); }
 catch (e) { console.warn('AVISO: no se pudo leer commands.json:', e.message); }
+// Las secciones locales van DETRÁS de las del repo. Si no existe el fichero, no pasa nada:
+// es opcional por diseño (cada entorno decide si tiene algo propio que añadir).
+if (fs.existsSync(COMMANDS_LOCAL_FILE)) {
+  try {
+    const local = JSON.parse(fs.readFileSync(COMMANDS_LOCAL_FILE, 'utf8'));
+    commands = { ...commands, categories: (commands.categories || []).concat(local.categories || []) };
+  } catch (e) { console.warn('AVISO: no se pudo leer commands.local.json:', e.message); }
+}
 const cmdCount = (commands.categories || []).reduce((n, c) => n + ((c.commands || []).length), 0);
+
+// ---------------- lanzadores (las CLIs de la barra lateral) ----------------
+// Misma pauta que commands.json: JSON editable a mano, leído en scan-time. Así se añade
+// una CLI o un flag sin recompilar el bundle (que sí requiere npm).
+let launchers = { clis: [] };
+try { launchers = JSON.parse(fs.readFileSync(LAUNCHERS_FILE, 'utf8')); }
+catch (e) { console.warn('AVISO: no se pudo leer launchers.json:', e.message); }
+const cliCount = (launchers.clis || []).length;
 
 // ---------------- datos + render ----------------
 const now = new Date();
@@ -229,10 +249,15 @@ const DATA = {
   aliasByPath,
   favorites,
   commands,
+  launchers,
+  // Ámbito de la bóveda de credenciales de ESTA máquina (RUTAS_LLAVE_AMBITO en rutas.config.sh).
+  // Vacío = este entorno no usa bóveda: la UI no enseña la nota ni antepone ningún `unlock`.
+  llaveAmbito: CFG.RUTAS_LLAVE_AMBITO || '',
   stats: {
     folderCount: totalFolders,
     sectionCount: sections.length,
     commandCount: cmdCount,
+    cliCount,
     aliasCount: Object.keys(aliasByPath).length,
     perSection,
   },
@@ -270,7 +295,7 @@ catch (e) {
   console.error('ERROR: falta el bundle de la UI:', BUNDLE);
   console.error('  Es un artefacto versionado en el repo. Si editaste src/, recompílalo:');
   console.error('    npm install   (una sola vez)');
-  console.error('    npm run build   (o: rutas-web-rebuild)');
+  console.error('    npm run build   (o: rutas-jump-rebuild)');
   console.error('  En una máquina sin npm, basta `git pull` para traerlo ya compilado.');
   process.exit(1);
 }
@@ -285,5 +310,5 @@ fs.renameSync(OUT_TMP, OUT);
 
 const ms = Date.now() - t0;
 const kb = (Buffer.byteLength(html) / 1024).toFixed(0);
-console.log(`✓ dashboard.html generado — ${totalFolders} carpetas · ${sections.length} secciones · ${cmdCount} comandos · ${favorites.length} favoritos · ${kb} KB · ${ms} ms`);
+console.log(`✓ dashboard.html generado — ${totalFolders} carpetas · ${sections.length} secciones · ${cliCount} CLIs · ${cmdCount} comandos · ${favorites.length} favoritos · ${kb} KB · ${ms} ms`);
 console.log('  Abrir: ' + OUT);

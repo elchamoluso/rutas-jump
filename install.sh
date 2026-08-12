@@ -177,7 +177,7 @@ cat <<EOF
   y prueba:
     rutas-help        # lista todos los atajos cd-*
     cd-drive          # salta a la raíz de tu carpeta base
-    rutas-web         # abre el dashboard web en el navegador
+    rutas-jump         # abre el dashboard web en el navegador
 
   Atajos personales: copia custom-aliases.example.sh a custom-aliases.sh y edítalo.
   Mantén actualizado automáticamente (opcional) añadiendo a tu crontab:

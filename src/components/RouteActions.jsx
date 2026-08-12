@@ -9,11 +9,18 @@
 // donde lo coloquemos — aquí, en la línea justo debajo del nombre.
 import { Flex, ActionButton, Text, TooltipTrigger, Tooltip } from '@adobe/react-spectrum';
 import { copyText } from '../clipboard';
+import { useLauncher } from '../launcher';
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 const BTN = { minWidth: 0, height: 28, paddingInline: 10 };
 
 export default function RouteActions({ abs, aliases = [] }) {
+  // La CLI activa viene por contexto (ver launcher.js). El comando se calcula aquí, en el
+  // render, para que onPress pueda llamar a copyText SÍNCRONAMENTE: si se copiara tras un
+  // await o un fetch, la activación transitoria del usuario ya habría caducado.
+  const { cli, comando } = useLauncher();
+  const cmd = cli ? comando(abs) : '';
+
   return (
     <Flex direction="row" gap="size-100" wrap alignItems="center" UNSAFE_style={{ rowGap: 8 }}>
       {aliases.map((a) => (
@@ -38,6 +45,23 @@ export default function RouteActions({ abs, aliases = [] }) {
         </ActionButton>
         <Tooltip>cd "{abs}"</Tooltip>
       </TooltipTrigger>
+
+      {cli ? (
+        <TooltipTrigger delay={400}>
+          <ActionButton
+            isQuiet
+            UNSAFE_className="rutas-runbtn"
+            onPress={() => copyText(cmd)}
+            aria-label={'Copiar comando para ' + cli.name + ': ' + cmd}
+            UNSAFE_style={BTN}
+          >
+            <Text UNSAFE_style={{ fontSize: '12px' }}>📋 {cli.name}</Text>
+          </ActionButton>
+          <Tooltip>
+            <Text UNSAFE_style={{ fontFamily: MONO, fontSize: '11.5px' }}>{cmd}</Text>
+          </Tooltip>
+        </TooltipTrigger>
+      ) : null}
     </Flex>
   );
 }

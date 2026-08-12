@@ -29,6 +29,9 @@ en la terminal.
   Compartidas · Home) es un **nodo de primer nivel** del árbol, con su alias (`cd-drive`/`cd-sd`/…)
   y botones *Copiar ruta* / *cd*, que se expande a su árbol de carpetas. ⭐ favoritos, buscador
   instantáneo, tema claro/oscuro y color de acento configurable. Un único HTML autocontenido y offline.
+- **Lanzadores por CLI** — la barra lateral son tus CLIs (Claude Code, agy, codex…). Eliges cómo
+  arranca en la banda superior y cada carpeta te da **un solo comando copiable**:
+  `cd '<ruta>' && claude -c`. Se definen en `launchers.json`, sin recompilar nada.
 - **Directorio de comandos** — secciones de comandos copiables (Claude Code, git, etc.), totalmente
   configurables por ti.
 - **Configurable** — tu carpeta base, puerto y branding (título, emoji, color) en un solo archivo.
@@ -54,7 +57,7 @@ Abre una terminal nueva y prueba:
 ```bash
 rutas-help     # lista todos los atajos cd-*
 cd-drive       # salta a la raíz de tu carpeta base
-rutas-web      # abre el dashboard en el navegador
+rutas-jump      # abre el dashboard en el navegador
 ```
 
 ### Instalación no interactiva
@@ -111,7 +114,52 @@ Edita `commands.json`. Cada objeto en `categories` es una **sección** del dashb
 }
 ```
 
-Ejecuta `rutas-web` (o `rutas-web-build`) para reflejarlo.
+Ejecuta `rutas-jump` (o `rutas-jump-build`) para reflejarlo.
+
+### Añadir una CLI a la barra lateral
+
+Edita `launchers.json`. Cada CLI trae sus `modos` (excluyentes, van justo detrás del binario y
+pueden ser un subcomando) y sus `toggles` (acumulativos):
+
+```json
+{
+  "id": "midcli", "name": "mi-cli", "icon": "🔧", "bin": "mi-cli",
+  "modos":   [ { "id": "nueva", "label": "Nueva", "args": "" } ],
+  "toggles": [ { "id": "yolo", "label": "Sin confirmar", "args": "--yes", "warn": true } ]
+}
+```
+
+Verifica los flags contra el `--help` del binario: **no son intercambiables entre CLIs** (en codex
+`-c` es `--config`, no «continuar»). Lo marcado con `"warn": true` no se recuerda entre recargas.
+
+### Secciones de comandos propias de una máquina
+
+Lo que solo tenga sentido en **este** equipo va en `commands.local.json` (mismo formato,
+está en `.gitignore`). El generador lo fusiona detrás de `commands.json`, así que el repo se
+queda genérico y cada entorno añade lo suyo sin ensuciar el proyecto.
+
+### Entornos que cifran sus credenciales
+
+Si la máquina guarda sus tokens en una bóveda —por ejemplo con
+[`llave`](https://github.com/elchamoluso/llave-usb), que los cifra en un pendrive con PIN y los
+descifra a RAM— pon el ámbito en `RUTAS_LLAVE_AMBITO` (en `rutas.config.sh`). A partir de ahí el
+dashboard **se adapta solo**:
+
+- Una nota arriba con el estado real de la bóveda: abierta, cerrada, sin pendrive, o con
+  credenciales **sin cifrar** en el disco.
+- Mientras el ámbito no esté abierto, el comando que copias llega con el desbloqueo delante —
+  las CLIs leen sus tokens **al arrancar**, no después:
+
+  ```
+  llave unlock personal && cd '/ruta/al/proyecto' && claude -c
+  ```
+
+  Si el desbloqueo falla, el `&&` corta y la CLI no arranca a ciegas sin credenciales.
+
+Con `RUTAS_LLAVE_AMBITO` vacío (el valor por defecto) no aparece ninguna nota ni ningún prefijo:
+es un dashboard de rutas normal. El PIN se teclea siempre en tu terminal; la app nunca lo pide,
+no ejecuta nada y no toca tus secretos: para saber el estado solo comprueba **si existen** los
+ficheros del manifiesto, nunca su contenido.
 
 ---
 
@@ -119,14 +167,19 @@ Ejecuta `rutas-web` (o `rutas-web-build`) para reflejarlo.
 
 | Comando | Acción |
 |---|---|
-| `rutas-web` | Regenera, sirve y abre el dashboard en el navegador |
-| `rutas-web-stop` | Detiene el servidor |
-| `rutas-web-build` | Solo regenera el HTML (sin servir) — **solo node** |
-| `rutas-web-rebuild` | Recompila el bundle React Spectrum desde `src/` — **solo para desarrollar la UI (requiere npm)** |
+| `rutas-jump` | Regenera, sirve y abre el dashboard en el navegador |
+| `rutas-jump-stop` | Detiene el servidor |
+| `rutas-jump-build` | Solo regenera el HTML (sin servir) — **solo node** |
+| `rutas-jump-rebuild` | Recompila el bundle React Spectrum desde `src/` — **solo para desarrollar la UI (requiere npm)** |
 
-Se sirve por `http://localhost:7777` (en ChromeOS también `http://penguin.linux.test:7777`).
-Se sirve por HTTP porque el navegador del host de ChromeOS no puede abrir `file://` del contenedor
-Linux; en macOS/Linux funciona igual. Requiere `node` (cualquier versión reciente).
+Se sirve por `http://localhost:7777`, **solo en loopback** (`RUTAS_HOST=0.0.0.0` si de verdad
+necesitas alcanzarlo desde otra máquina). Por HTTP y no `file://` porque el navegador del host de
+ChromeOS no puede abrir ficheros del contenedor Linux; en macOS/Linux funciona igual. `localhost`
+además es *secure context*, que es lo que necesita el portapapeles. Requiere `node`.
+
+Si existe una unidad `rutas-jump.service` (systemd de usuario), **ella** es la dueña del servidor y
+`rutas-jump`/`rutas-jump-stop` hacen `systemctl --user start|stop`. Sin unidad se cae al modo
+`nohup`+`pkill` de siempre, que es lo que ocurre en macOS.
 
 ---
 
@@ -140,7 +193,7 @@ escaneo (`window.DATA`) en `dashboard.template.html`.
 
 ```bash
 npm install        # una sola vez (trae react + @adobe/react-spectrum + esbuild)
-npm run build      # recompila ui/dashboard.bundle.js   (o: rutas-web-rebuild)
+npm run build      # recompila ui/dashboard.bundle.js   (o: rutas-jump-rebuild)
 npm run build:watch  # rebuild incremental mientras editas src/
 ```
 
@@ -165,7 +218,10 @@ En macOS basta con ejecutar `rutas-refresh` cuando reorganices carpetas.
 ## 🧭 Notas por plataforma
 
 - **ChromeOS (Crostini):** base habitual `/mnt/chromeos/GoogleDrive/MyDrive`. El dashboard se abre en
-  el Chrome del host vía `localhost` o `penguin.linux.test`.
+  el Chromium **del contenedor** vía `localhost`. Para tenerlo como app con ventana propia e icono
+  en el lanzador: una unidad `systemd --user` que mantenga el servidor en pie y un `.desktop` que
+  espere al `/health` y abra `chromium --app=http://localhost:7777`. Una PWA instalada desde el
+  Chrome del host **no** sirve: si el contenedor está apagado, esa ventana no lo levanta.
 - **macOS:** base habitual `~/Library/CloudStorage/GoogleDrive-<cuenta>/<Mi unidad>` (el nombre de la
   raíz depende del idioma del sistema). `install.sh` lo autodetecta.
 - **Linux:** cualquier carpeta o un Drive montado con rclone/insync.
@@ -178,7 +234,7 @@ En macOS basta con ejecutar `rutas-refresh` cuando reorganices carpetas.
 install.sh              Instalador cross-platform
 loader.sh               Punto de entrada (lo sourcea tu shell rc)
 regenerate-rutas.sh     Escanea la base → genera los aliases cd-*
-rutas.lib.sh            Funciones (rutas-web, rutas-help, rutas-refresh…)
+rutas.lib.sh            Funciones (rutas-jump, rutas-help, rutas-refresh…)
 generate-dashboard.js   Inyecta datos + bundle en dashboard.html (Node, runtime sin npm)
 serve-dashboard.js      Sirve el dashboard por HTTP (Node, runtime sin npm)
 dashboard.template.html Shell mínimo: #root + markers /*__DATA__*/ y /*__BUNDLE__*/
@@ -187,6 +243,7 @@ build.js                esbuild: src/ → ui/dashboard.bundle.js (build-time, np
 ui/dashboard.bundle.js  Bundle precompilado y VERSIONADO (lo que realmente se sirve)
 package.json            Deps build-time (react, @adobe/react-spectrum, esbuild)
 commands.json           Secciones de comandos copiables (edítalo)
+launchers.json          Las CLIs de la barra lateral y sus modificadores (edítalo)
 rutas.config.example.sh Plantilla de configuración
 custom-aliases.example.sh Plantilla de atajos personales
 AGENTS.md               Notas para agentes AI

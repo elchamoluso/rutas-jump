@@ -3,7 +3,7 @@ import { Flex, View, Heading, Text, ActionGroup, Item, Divider, ActionButton, To
 import Moon from '@spectrum-icons/workflow/Moon';
 import Light from '@spectrum-icons/workflow/Light';
 
-export default function Sidebar({ brand, stats, view, onViewChange, scheme, onToggleScheme, generatedAt }) {
+export default function Sidebar({ brand, stats, clis, view, onViewChange, scheme, onToggleScheme, generatedAt }) {
   return (
     <View
       backgroundColor="gray-75"
@@ -29,7 +29,12 @@ export default function Sidebar({ brand, stats, view, onViewChange, scheme, onTo
             if (k) onViewChange(k);
           }}
         >
-          <Item key="rutas">📁 Rutas</Item>
+          {/* Una entrada por CLI: el mismo árbol de carpetas, pero lo que copias sale ya
+              montado para ella. Sin <Divider> aquí dentro: ActionGroup es una colección de
+              Spectrum y solo admite <Item>. */}
+          {(clis || []).length
+            ? clis.map((c) => <Item key={'cli:' + c.id}>{(c.icon ? c.icon + ' ' : '') + c.name}</Item>)
+            : <Item key="rutas">📁 Rutas</Item>}
           <Item key="comandos">⌨ Comandos</Item>
         </ActionGroup>
 

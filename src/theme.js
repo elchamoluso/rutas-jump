@@ -65,7 +65,22 @@ export function injectAccentOverride() {
   }
   .rutas-copybtn:active {
     background: color-mix(in srgb, var(--copy-accent) 32%, transparent) !important;
-  }`;
+  }
+
+  /* Copiar el comando de arranque es LA acción de cada fila: va en relleno sólido para que
+     se distinga de un vistazo de los chips de copiar ruta/alias, que son secundarios. */
+  .rutas-runbtn {
+    --copy-accent: var(--rutas-accent, #0070f3);
+    border: 1px solid var(--copy-accent) !important;
+    background: var(--copy-accent) !important;
+    border-radius: 7px !important;
+    color: #fff !important;
+    font-weight: 600;
+    transition: filter 120ms ease;
+  }
+  .rutas-runbtn * { color: #fff !important; fill: #fff !important; }
+  .rutas-runbtn:hover { filter: brightness(1.12); }
+  .rutas-runbtn:active { filter: brightness(0.92); }`;
   const s = document.createElement('style');
   s.setAttribute('data-rutas-accent', '');
   s.appendChild(document.createTextNode(css));

@@ -1,0 +1,49 @@
+{
+  "_comment": "Las CLIs de la barra lateral y sus modificadores de arranque. Flags VERIFICADOS contra el --help de cada binario (2026-08-12): claude 2.1.228, agy 1.1.11, codex-cli 0.147.0. OJO: son por CLI a propósito, NUNCA una plantilla común — en codex '-c' es --config (TOML), no «continuar», y agy usa el paquete flag de Go, que aborta ante un flag desconocido. 'modos' son excluyentes y van INMEDIATAMENTE tras el binario (pueden ser un subcomando, como 'resume --last'); 'toggles' se acumulan detrás. 'warn: true' marca lo que desactiva comprobaciones: eso nunca se lee de disco, arranca siempre en su 'default' (hoy true en los tres, así que el comando copiado los lleva puestos; desmarcarlos vale solo para esa sesión). Si este entorno cifra sus credenciales con una bóveda, el ámbito NO va aquí: va en RUTAS_LLAVE_AMBITO de rutas.config.sh, porque es propiedad de la máquina y no de cada CLI. Edítalo libremente y ejecuta rutas-jump para reflejarlo (no requiere recompilar el bundle).",
+  "clis": [
+    {
+      "id": "claude",
+      "name": "Claude Code",
+      "icon": "🤖",
+      "bin": "claude",
+      "modos": [
+        { "id": "nueva", "label": "Nueva", "args": "", "desc": "Sesión nueva en esa carpeta." },
+        { "id": "continuar", "label": "Continuar", "args": "-c", "desc": "Retoma la conversación más reciente de esa carpeta." },
+        { "id": "reanudar", "label": "Reanudar", "args": "-r", "desc": "Abre el selector de sesiones anteriores." }
+      ],
+      "toggles": [
+        { "id": "skip", "label": "Saltar permisos", "args": "--dangerously-skip-permissions", "warn": true, "default": true, "desc": "Omite TODAS las confirmaciones de permisos." },
+        { "id": "opus", "label": "Modelo opus", "args": "--model opus", "desc": "Fija el modelo de la sesión." }
+      ]
+    },
+    {
+      "id": "agy",
+      "name": "agy",
+      "icon": "🛸",
+      "bin": "agy",
+      "modos": [
+        { "id": "nueva", "label": "Nueva", "args": "", "desc": "Sesión nueva (TUI) en esa carpeta." },
+        { "id": "continuar", "label": "Continuar", "args": "-c", "desc": "Retoma la conversación más reciente." }
+      ],
+      "toggles": [
+        { "id": "skip", "label": "Saltar permisos", "args": "--dangerously-skip-permissions", "warn": true, "default": true, "desc": "Auto-aprueba todos los permisos de herramientas (modo YOLO)." },
+        { "id": "sandbox", "label": "Sandbox", "args": "--sandbox", "desc": "Ejecuta con las restricciones de terminal activadas." }
+      ]
+    },
+    {
+      "id": "codex",
+      "name": "codex",
+      "icon": "🧠",
+      "bin": "codex",
+      "modos": [
+        { "id": "nueva", "label": "Nueva", "args": "", "desc": "Sesión nueva en esa carpeta." },
+        { "id": "continuar", "label": "Continuar", "args": "resume --last", "desc": "Retoma la sesión más reciente. Es un SUBCOMANDO: en codex, -c es --config." },
+        { "id": "reanudar", "label": "Reanudar", "args": "resume", "desc": "Abre el selector de sesiones (filtra por el directorio actual)." }
+      ],
+      "toggles": [
+        { "id": "bypass", "label": "Sin sandbox ni aprobaciones", "args": "--dangerously-bypass-approvals-and-sandbox", "warn": true, "default": true, "desc": "Salta confirmaciones Y sandbox. Solo en entornos ya aislados." },
+        { "id": "search", "label": "Búsqueda web", "args": "--search", "desc": "Habilita la herramienta de búsqueda web nativa." }
+      ]
+    }
+  ]
+}

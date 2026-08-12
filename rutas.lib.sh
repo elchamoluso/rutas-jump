@@ -16,41 +16,79 @@ rutas-refresh() {
     echo "✓ Rutas actualizadas"
 }
 
+# ¿Está instalada la unidad systemd de usuario? Si lo está, ELLA es la dueña del servidor y
+# nadie más lo arranca ni lo mata a mano (si no, habría dos dueños del puerto: un pkill
+# mataría el proceso y systemd lo respawnearía). En macOS no hay systemctl: modo nohup.
+_rutas_tiene_unidad() {
+    command -v systemctl >/dev/null 2>&1 && systemctl --user cat rutas-jump.service >/dev/null 2>&1
+}
+
+# Espera a que el servidor responda antes de abrir la ventana (el navegador en modo app no
+# reintenta si llega demasiado pronto).
+_rutas_espera_health() {
+    local port="$1" i
+    for i in $(seq 60); do
+        curl -sf -o /dev/null "http://localhost:$port/health" && return 0
+        sleep 0.25
+    done
+    return 1
+}
+
 # Regenera el dashboard, arranca el servidor local y lo abre en el navegador.
-# (En ChromeOS el Chrome no puede abrir file:// del contenedor, por eso se sirve por http.)
-rutas-web() {
+# (En ChromeOS el Chrome del host no puede abrir file:// del contenedor, por eso se sirve por http.)
+rutas-jump() {
     local dir="$RUTAS_DIR"
     local port="${RUTAS_PORT:-7777}"
     command -v node >/dev/null 2>&1 || { echo "✗ node no está instalado" >&2; return 1; }
     node "$dir/generate-dashboard.js" || { echo "✗ fallo al generar el dashboard" >&2; return 1; }
-    # Arranca el servidor en segundo plano (si ya hay uno en el puerto, la 2ª instancia sale sola)
-    RUTAS_PORT="$port" nohup node "$dir/serve-dashboard.js" >"$dir/.serve.log" 2>&1 & disown 2>/dev/null
-    sleep 1
+
+    if _rutas_tiene_unidad; then
+        systemctl --user start rutas-jump.service || { echo "✗ no arrancó rutas-jump.service" >&2; return 1; }
+    else
+        # Sin unidad: como siempre. Si ya hay uno en el puerto, la 2ª instancia sale sola.
+        RUTAS_PORT="$port" nohup node "$dir/serve-dashboard.js" >"$dir/.serve.log" 2>&1 & disown 2>/dev/null
+    fi
+
+    _rutas_espera_health "$port" || { echo "✗ el servidor no respondió en el puerto $port" >&2; return 1; }
     local url="http://localhost:$port"
     echo "→ Abre en el navegador:  $url"
-    [ "$(uname)" = "Linux" ] && echo "  (ChromeOS, si no abre:   http://penguin.linux.test:$port )"
     if command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 &
     elif command -v open >/dev/null 2>&1; then open "$url"; fi
 }
 
 # Detiene el servidor del dashboard.
-rutas-web-stop() {
-    pkill -f "serve-dashboard.js" >/dev/null 2>&1 && echo "✓ servidor detenido" || echo "(no había servidor corriendo)"
+rutas-jump-stop() {
+    if _rutas_tiene_unidad; then
+        systemctl --user stop rutas-jump.service && echo "✓ servicio detenido"
+    else
+        pkill -f "serve-dashboard.js" >/dev/null 2>&1 && echo "✓ servidor detenido" || echo "(no había servidor corriendo)"
+    fi
 }
 
 # Solo regenera el HTML del dashboard (sin servir ni abrir).
-rutas-web-build() {
+rutas-jump-build() {
     command -v node >/dev/null 2>&1 || { echo "✗ node no está instalado" >&2; return 1; }
     node "$RUTAS_DIR/generate-dashboard.js"
 }
 
-# rutas-web-rebuild — SOLO para desarrollar la UI (requiere npm, build-time).
+# rutas-jump-rebuild — SOLO para desarrollar la UI (requiere npm, build-time).
 # Recompila el bundle React Spectrum (ui/dashboard.bundle.js) desde src/ y regenera
-# el dashboard. El uso normal (rutas-web / rutas-web-build / cron) NO necesita npm:
+# el dashboard. El uso normal (rutas-jump / rutas-jump-build / cron) NO necesita npm:
 # basta el bundle ya commiteado. Tras recompilar, recuerda commitear el bundle.
-rutas-web-rebuild() {
+# `npm ci` y no `npm install`: clava las versiones del lock. React Spectrum 3.47.1 es la
+# versión contra la que están verificados a mano el workaround del SlotProvider del TreeView
+# (components/RouteActions.jsx) y el hack de altura de fila de theme.js; un minor nuevo los
+# rompe en silencio.
+rutas-jump-rebuild() {
     command -v npm >/dev/null 2>&1 || { echo "✗ npm no está instalado (solo hace falta para desarrollar la UI)" >&2; return 1; }
-    ( cd "$RUTAS_DIR" && npm install && npm run build ) || return 1
+    ( cd "$RUTAS_DIR" && npm ci && npm run build ) || return 1
     echo "✓ ui/dashboard.bundle.js recompilado — recuerda: git add ui/dashboard.bundle.js && git commit"
     node "$RUTAS_DIR/generate-dashboard.js"
 }
+
+# Nombres antiguos (la herramienta se llamaba rutas-web). Se mantienen para no romper
+# memoria muscular ni scripts viejos.
+rutas-web()         { rutas-jump "$@"; }
+rutas-web-stop()    { rutas-jump-stop "$@"; }
+rutas-web-build()   { rutas-jump-build "$@"; }
+rutas-web-rebuild() { rutas-jump-rebuild "$@"; }
