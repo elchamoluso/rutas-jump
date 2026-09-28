@@ -46,7 +46,7 @@ export default function RouteActions({ abs, aliases = [] }) {
         <Tooltip>cd "{abs}"</Tooltip>
       </TooltipTrigger>
 
-      {cli ? (
+      {cli && cmd ? (
         <TooltipTrigger delay={400}>
           <ActionButton
             isQuiet

@@ -111,6 +111,16 @@ cifra credenciales: sin nota y sin prefijo. Nada específico de una bóveda conc
 lo de esta máquina vive en `rutas.config.sh` y `commands.local.json`, y el repo solo lleva la
 documentación de cómo activarlo (`rutas.config.example.sh`, README).
 
+También son de la máquina, y por eso viven en `rutas.config.sh`:
+
+- `RUTAS_CLIS` filtra por `id` las CLIs de `launchers.json` que salen en la barra lateral (vacío = todas).
+- `RUTAS_LANZADOR_<PREFIJO>` da a una raíz su **propio lanzador**, que llega a la UI como
+  `section.lanzador`. En esa raíz el 📋 copia `<lanzador> '<subcarpeta relativa>' <modo> <toggles>`:
+  sin `cd`, porque lo hace el lanzador. Solo lo genera con la CLI de bin `claude`; con otra, esa raíz
+  no tiene comando. Y **nunca lleva los toggles `warn`**, porque el lanzador trae sus propias
+  confirmaciones. La raíz de una ruta es la de `base` más larga que la contiene (`seccionDe` en
+  `src/data.js`), porque un home en `$HOME` contiene a todas las demás.
+
 Reglas que **no** se rompen:
 
 - **Los flags son por CLI, nunca una plantilla común.** En codex `-c` es `--config` (TOML), no

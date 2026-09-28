@@ -194,7 +194,10 @@ for (const r of ROOTS) {
   const { roots, folders } = scanBase(r);
   perSection[r.id] = folders.length;
   totalFolders += folders.length;
-  sections.push({ id: r.id, label: r.label, base: r.base, prefix: r.prefix, roots, folders });
+  // Lanzador propio de la raíz (RUTAS_LANZADOR_<PREFIJO> en rutas.config.sh): si existe, esa raíz
+  // se abre con él y no con `cd && <cli>`. Es de la máquina, como la bóveda; vacío = como siempre.
+  const lanzador = (r.prefix && CFG['RUTAS_LANZADOR_' + r.prefix.toUpperCase()]) || '';
+  sections.push({ id: r.id, label: r.label, base: r.base, prefix: r.prefix, lanzador, roots, folders });
 }
 
 // ---------------- aliases (indexados por ruta ABSOLUTA → sin colisión entre secciones) ----------------
@@ -236,6 +239,9 @@ const cmdCount = (commands.categories || []).reduce((n, c) => n + ((c.commands |
 let launchers = { clis: [] };
 try { launchers = JSON.parse(fs.readFileSync(LAUNCHERS_FILE, 'utf8')); }
 catch (e) { console.warn('AVISO: no se pudo leer launchers.json:', e.message); }
+// Qué CLIs usa ESTA máquina (RUTAS_CLIS="claude,codex", por id). Vacío = todas las de launchers.json.
+const clisOk = (CFG.RUTAS_CLIS || '').split(',').map(s => s.trim()).filter(Boolean);
+if (clisOk.length) launchers = { ...launchers, clis: (launchers.clis || []).filter(c => clisOk.includes(c.id)) };
 const cliCount = (launchers.clis || []).length;
 
 // ---------------- datos + render ----------------

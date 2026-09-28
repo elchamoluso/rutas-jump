@@ -53,6 +53,22 @@ RUTAS_START_DIR=""
 # Es propiedad de la MÁQUINA, no de cada CLI, por eso vive aquí y no en launchers.json.
 RUTAS_LLAVE_AMBITO=""
 
+# --- CLIs de la barra lateral (OPCIONAL) --------------------------------------
+# Ids de launchers.json que usa esta máquina, separados por comas. Vacío = todas.
+RUTAS_CLIS=""
+
+# --- Lanzador propio por raíz (OPCIONAL) --------------------------------------
+# Si una raíz no se abre con `cd && claude` sino con un envoltorio tuyo que ya hace el cd y
+# carga su propia configuración, decláralo con el PREFIJO de la raíz en mayúsculas:
+#
+#   RUTAS_ROOT_5="Cliente Acme|/ruta/a/Acme|acme|6|"
+#   RUTAS_LANZADOR_ACME="mi-lanzador acme"
+#
+# El 📋 de esa raíz copia entonces  mi-lanzador acme '<subcarpeta relativa>' <modo> <toggles>:
+# sin `cd`, solo con Claude Code (con otra CLI esa raíz no tiene comando) y SIN los toggles
+# marcados `warn` (--dangerously-skip-permissions…), porque el lanzador trae sus confirmaciones.
+# El lanzador debe aceptar  [subcarpeta] [argumentos de claude…].
+
 # --- Puerto del dashboard web local ------------------------------------------
 RUTAS_PORT="7777"
 

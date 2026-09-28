@@ -14,7 +14,7 @@ import FlagsBar from './components/FlagsBar';
 import VaultBanner from './components/VaultBanner';
 import { useSystemColorScheme, injectAccentOverride } from './theme';
 import { LauncherProvider, useVault, cargarPrefs, guardarPrefs } from './launcher';
-import { buildCommand } from './data';
+import { buildCommand, seccionDe } from './data';
 
 export default function App({ data }) {
   const system = useSystemColorScheme();
@@ -57,9 +57,11 @@ export default function App({ data }) {
   const launcher = useMemo(
     () => ({
       cli,
-      comando: (abs) => buildCommand({ cli, modo: pref.modo, toggles: pref.toggles, abs, vault, ambito }),
+      comando: (abs) => buildCommand({
+        cli, modo: pref.modo, toggles: pref.toggles, abs, vault, ambito, seccion: seccionDe(abs, data.sections),
+      }),
     }),
-    [cli, pref.modo, pref.toggles, vault, ambito]
+    [cli, pref.modo, pref.toggles, vault, ambito, data]
   );
 
   const brand = data.brand || {};

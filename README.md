@@ -138,6 +138,21 @@ Lo que solo tenga sentido en **este** equipo va en `commands.local.json` (mismo 
 está en `.gitignore`). El generador lo fusiona detrás de `commands.json`, así que el repo se
 queda genérico y cada entorno añade lo suyo sin ensuciar el proyecto.
 
+### CLIs y lanzadores propios de una máquina
+
+- `RUTAS_CLIS="claude"`: la barra lateral solo muestra esas CLIs de `launchers.json` (ids separados
+  por comas; vacío = todas).
+- `RUTAS_LANZADOR_<PREFIJO>`: una raíz que se abre con un envoltorio tuyo, no con `cd && claude`.
+  Con `RUTAS_ROOT_5="Cliente Acme|/ruta/a/Acme|acme|6|"` y `RUTAS_LANZADOR_ACME="mi-lanzador acme"`,
+  el 📋 de sus carpetas copia:
+
+  ```
+  mi-lanzador acme 'subcarpeta/relativa' -c
+  ```
+
+  Sin `cd` y solo con Claude Code. Tampoco lleva los toggles marcados `warn`, porque el lanzador trae
+  sus propias confirmaciones. El envoltorio debe aceptar `[subcarpeta] [argumentos de claude…]`.
+
 ### Entornos que cifran sus credenciales
 
 Si la máquina guarda sus tokens en una bóveda —por ejemplo con

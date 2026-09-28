@@ -95,20 +95,43 @@ export function ambitoPendiente(ambito, vault) {
   return a.estado === 'abierta' ? null : ambito;
 }
 
+// La sección (raíz) de una ruta: la de `base` MÁS LARGA que la contiene, porque una raíz puede
+// colgar de otra (un home en $HOME contiene a todas las demás).
+export function seccionDe(abs, sections) {
+  let best = null;
+  for (const s of sections || []) {
+    if ((abs === s.base || abs.startsWith(s.base + '/')) && (!best || s.base.length > best.base.length)) best = s;
+  }
+  return best;
+}
+
 // El comando completo de una carpeta para la CLI activa. UNA sola línea y sin salto final:
 // un \n haría que el terminal lo EJECUTE al pegarlo, con los flags peligrosos dentro.
-export function buildCommand({ cli, modo, toggles, abs, vault, ambito }) {
+//
+// Raíz con lanzador propio (section.lanzador, de RUTAS_LANZADOR_<PREFIJO>): el lanzador hace el
+// cd, recibe la subcarpeta RELATIVA a la raíz y envuelve a claude, así que con otra CLI esa raíz
+// no tiene comando. Tampoco lleva los toggles `warn`: el lanzador trae sus propias confirmaciones
+// y saltárselas es justo lo que no se quiere ahí.
+export function buildCommand({ cli, modo, toggles, abs, vault, ambito, seccion }) {
   if (!cli || !abs) return '';
+  const lanzador = (seccion && seccion.lanzador) || '';
+  if (lanzador && cli.bin !== 'claude') return '';
   const partes = [];
   const amb = ambitoPendiente(ambito, vault);
   if (amb) partes.push('llave unlock ' + amb + ' &&');
-  partes.push('cd ' + shellQuote(abs) + ' &&');
-  partes.push(cli.bin);
+  if (lanzador) {
+    partes.push(lanzador);
+    if (abs !== seccion.base) partes.push(shellQuote(abs.slice(seccion.base.length + 1)));
+  } else {
+    partes.push('cd ' + shellQuote(abs) + ' &&');
+    partes.push(cli.bin);
+  }
   // El modo va INMEDIATAMENTE tras el binario: en codex es un subcomando ('resume --last'),
   // no una bandera, y los subcomandos no admiten flags por delante.
   const m = (cli.modos || []).find((x) => x.id === modo);
   if (m && m.args) partes.push(m.args);
   for (const t of cli.toggles || []) {
+    if (lanzador && t.warn) continue;
     if ((toggles || []).includes(t.id) && t.args) partes.push(t.args);
   }
   return partes.join(' ');
