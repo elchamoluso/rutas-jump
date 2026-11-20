@@ -23,7 +23,7 @@ sus raíces en `rutas.config.sh` con líneas `RUTAS_ROOT_N="etiqueta|path|prefij
 | `rutas.lib.sh` | Funciones: `rutas-jump`, `rutas-jump-stop`, `rutas-jump-build`, `rutas-jump-rebuild`, `rutas-help`, `rutas-refresh` | Estable |
 | `custom-aliases.sh` | Atajos personales del usuario (override de los autogenerados) | Manual · **gitignored** |
 | `generate-dashboard.js` | Inyecta datos (`window.DATA`) + el bundle commiteado en la plantilla → `dashboard.html` (Node, **runtime sin npm**) | Estable |
-| `serve-dashboard.js` | Sirve `dashboard.html` por HTTP en **loopback** + `GET /api/llave` (Node, runtime sin npm) | Estable |
+| `serve-dashboard.js` | Sirve `dashboard.html` por HTTP en **loopback** (lo regenera en cada carga) + `POST /api/regenerate` (alias + dashboard: el botón «Actualizar») + `GET /api/llave` (Node, runtime sin npm) | Estable |
 | `dashboard.template.html` | Shell mínimo: `#root` + markers `/*__DATA__*/` y `/*__BUNDLE__*/` | Raramente |
 | `src/` | **UI React + Adobe React Spectrum** (App, Sidebar, RutasView, ComandosView, FlagsBar, VaultBanner…) | **Editar para cambiar la UI** |
 | `src/launcher.js` | Contexto de la CLI activa (modo/toggles, persistencia) + sonda de la bóveda | **Editar para cambiar la UI** |
@@ -91,6 +91,14 @@ No lo rompas.
 
 - **Abrir:** `rutas-jump` (regenera, sirve, abre). `rutas-jump-stop` detiene; `rutas-jump-build` solo
   regenera (node); `rutas-jump-rebuild` recompila el bundle (npm, solo dev).
+- **Al día:** cada carga de la página regenera el dashboard (carpetas, ~0,3 s). El botón «Actualizar»
+  de la barra lateral llama a `POST /api/regenerate`, que corre `regenerate-rutas.sh` (alias `cd-*` +
+  dashboard, ~2 s), y recarga. La petición lleva la cabecera `X-Rutas: 1`: sin ella el servidor responde
+  403, y así ninguna web ajena la dispara (CSRF). Las terminales abiertas cogen los alias nuevos con
+  `rutas-refresh`, que antes quita todos los `cd-*` para que no sigan vivos los de carpetas renombradas;
+  las terminales nuevas los cargan solas.
+- **Nunca dos regeneraciones a la vez** (`regenerar()` en `serve-dashboard.js`): las dos escriben
+  `dashboard.html.tmp`, y una lo truncaría mientras la otra lo renombra. No lo quites.
 
 **Para AIs — REGLA CRÍTICA:**
 - Si creas/borras/renombras carpetas o editas `commands.json` → `node "$RUTAS_DIR/generate-dashboard.js"`.
@@ -140,8 +148,12 @@ Reglas que **no** se rompen:
   desmarcarlos dura solo esa sesión). Los demás sí se recuerdan.
 
 **Dueño del servidor:** si existe la unidad `rutas-jump.service` (systemd de usuario), ella
-manda: `rutas-jump`/`rutas-jump-stop` hacen `systemctl --user start|stop`. Sin unidad (macOS)
-se cae al modo `nohup`+`pkill` de siempre. No mezcles los dos o habrá dos dueños del puerto.
+manda: `rutas-jump`/`rutas-jump-stop` hacen `systemctl --user start|stop`. En macOS hace lo mismo
+el LaunchAgent `~/Library/LaunchAgents/com.rutas-jump.plist` (`launchctl bootstrap|kickstart|bootout`).
+Sin ninguno de los dos se cae al modo `nohup`+`pkill` de siempre. No mezcles dos dueños del puerto.
+Bajo launchd el PATH no trae `/usr/local/bin`: por eso el servidor antepone la carpeta de su `node` al
+lanzar `regenerate-rutas.sh`. Y `node` necesita el permiso de macOS para leer la Drive (File Provider):
+sin él, la regeneración se queda esperando y, al llegar al tope, se sirve la última versión.
 
 ## Mantener actualizado (opcional)
 
@@ -155,6 +167,7 @@ Cron de ejemplo (Linux/ChromeOS), cada 30 min:
 | Síntoma | Causa | Solución |
 |---|---|---|
 | `cd-foo: command not found` tras crear carpeta | aliases desactualizados | `rutas-refresh` |
+| Una carpeta sale sin alias en el dashboard, o un `cd-*` lleva a una carpeta que ya no existe | aliases desactualizados (recargar solo rehace el dashboard) | botón «Actualizar» del dashboard, o `rutas-refresh` |
 | No aparecen aliases en terminal nueva | el rc no sourcea `loader.sh` | re-ejecutar `bash install.sh` |
 | `regenerate-rutas.sh` falla con "falta rutas.config.sh" | no instalado | `bash install.sh` |
 | El dashboard no abre | falta `node`, o puerto ocupado | instalar Node; `rutas-jump-stop` y reintentar |

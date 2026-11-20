@@ -1,7 +1,42 @@
-// Sidebar — marca, navegación de vistas, toggle de tema y footer de stats.
-import { Flex, View, Heading, Text, ActionGroup, Item, Divider, ActionButton, TooltipTrigger, Tooltip } from '@adobe/react-spectrum';
+// Sidebar — marca, navegación de vistas, botón «Actualizar», toggle de tema y footer de stats.
+import { useState } from 'react';
+import { Flex, View, Heading, Text, ActionGroup, Item, Divider, ActionButton, TooltipTrigger, Tooltip, ToastQueue } from '@adobe/react-spectrum';
 import Moon from '@spectrum-icons/workflow/Moon';
 import Light from '@spectrum-icons/workflow/Light';
+import Refresh from '@spectrum-icons/workflow/Refresh';
+
+// «Actualizar»: el servidor vuelve a escanear las carpetas y regenera los alias cd-*
+// (regenerate-rutas.sh, ~2 s); después se recarga la página. Recargar a secas solo rehace las
+// carpetas. Abierto como file:// no hay servidor al que llamar, así que el botón no sale.
+function BotonActualizar() {
+  const [actualizando, setActualizando] = useState(false);
+  if (!/^https?:$/.test(window.location.protocol)) return null;
+
+  const actualizar = () => {
+    setActualizando(true);
+    // Sin la cabecera X-Rutas el servidor rechaza la petición (cierra el CSRF; ver serve-dashboard.js).
+    fetch('api/regenerate', { method: 'POST', headers: { 'X-Rutas': '1' } })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j || !j.ok) throw new Error('regeneración fallida');
+        window.location.reload();
+      })
+      .catch(() => {
+        setActualizando(false);
+        ToastQueue.negative('No se pudo actualizar', { timeout: 2500 });
+      });
+  };
+
+  return (
+    <TooltipTrigger delay={300}>
+      <ActionButton isQuiet onPress={actualizar} isDisabled={actualizando} aria-label="Actualizar carpetas y alias">
+        <Refresh />
+        <Text>{actualizando ? 'Actualizando…' : 'Actualizar'}</Text>
+      </ActionButton>
+      <Tooltip>Vuelve a escanear las carpetas y regenera los alias cd-*</Tooltip>
+    </TooltipTrigger>
+  );
+}
 
 export default function Sidebar({ brand, stats, clis, view, onViewChange, scheme, onToggleScheme, generatedAt }) {
   return (
@@ -42,6 +77,7 @@ export default function Sidebar({ brand, stats, clis, view, onViewChange, scheme
 
         <Divider size="S" />
         <Flex direction="column" gap="size-100">
+          <BotonActualizar />
           <TooltipTrigger delay={300}>
             <ActionButton isQuiet onPress={onToggleScheme} aria-label="Cambiar tema claro/oscuro">
               {scheme === 'dark' ? <Light /> : <Moon />}

@@ -7,9 +7,17 @@ rutas-help() {
     alias | grep "alias cd-" | sed "s/alias //;s/='cd /  →  /;s/\"\$DRIVE/\$DRIVE/;s/\"'\$//"
 }
 
-# Re-escanea la carpeta base y recarga los aliases en la sesión actual.
+# Re-escanea las raíces y recarga los aliases en la sesión actual. Antes quita todos los cd-* de
+# esta terminal: si no, los de carpetas renombradas o borradas seguirían vivos hasta cerrarla.
+# (Solo los definen rutas.generated.sh y custom-aliases.sh, que se vuelven a cargar justo después.)
 rutas-refresh() {
     bash "$RUTAS_DIR/regenerate-rutas.sh" || return 1
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        unalias -m 'cd-*' 2>/dev/null
+    else
+        local a
+        for a in $(compgen -a cd-); do unalias "$a"; done
+    fi
     # shellcheck source=/dev/null
     [ -f "$RUTAS_DIR/rutas.generated.sh" ] && . "$RUTAS_DIR/rutas.generated.sh"
     [ -f "$RUTAS_DIR/custom-aliases.sh" ]  && . "$RUTAS_DIR/custom-aliases.sh"
@@ -21,6 +29,11 @@ rutas-refresh() {
 # mataría el proceso y systemd lo respawnearía). En macOS no hay systemctl: modo nohup.
 _rutas_tiene_unidad() {
     command -v systemctl >/dev/null 2>&1 && systemctl --user cat rutas-jump.service >/dev/null 2>&1
+}
+
+# En macOS, el equivalente es el LaunchAgent com.rutas-jump (arranca al iniciar sesión).
+_rutas_tiene_launchd() {
+    [ -f "$HOME/Library/LaunchAgents/com.rutas-jump.plist" ] && command -v launchctl >/dev/null 2>&1
 }
 
 # Espera a que el servidor responda antes de abrir la ventana (el navegador en modo app no
@@ -44,6 +57,10 @@ rutas-jump() {
 
     if _rutas_tiene_unidad; then
         systemctl --user start rutas-jump.service || { echo "✗ no arrancó rutas-jump.service" >&2; return 1; }
+    elif _rutas_tiene_launchd; then
+        launchctl print "gui/$(id -u)/com.rutas-jump" >/dev/null 2>&1 \
+            || launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.rutas-jump.plist"
+        launchctl kickstart "gui/$(id -u)/com.rutas-jump" >/dev/null 2>&1
     else
         # Sin unidad: como siempre. Si ya hay uno en el puerto, la 2ª instancia sale sola.
         RUTAS_PORT="$port" nohup node "$dir/serve-dashboard.js" >"$dir/.serve.log" 2>&1 & disown 2>/dev/null
@@ -60,6 +77,8 @@ rutas-jump() {
 rutas-jump-stop() {
     if _rutas_tiene_unidad; then
         systemctl --user stop rutas-jump.service && echo "✓ servicio detenido"
+    elif _rutas_tiene_launchd; then
+        launchctl bootout "gui/$(id -u)/com.rutas-jump" 2>/dev/null && echo "✓ servicio detenido (vuelve al iniciar sesión o con rutas-jump)" || echo "(no había servidor corriendo)"
     else
         pkill -f "serve-dashboard.js" >/dev/null 2>&1 && echo "✓ servidor detenido" || echo "(no había servidor corriendo)"
     fi

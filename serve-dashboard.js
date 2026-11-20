@@ -10,12 +10,13 @@
  * Si alguna vez hiciera falta alcanzarlo desde otra máquina: RUTAS_HOST=0.0.0.0.
  *
  * Uso:    node serve-dashboard.js        (puerto de rutas.config.sh, o RUTAS_PORT, o 7777)
- * Normal: lo arranca `rutas-jump` vía systemd. Detener: `rutas-jump-stop`.
+ * Normal: lo arranca `rutas-jump` vía systemd (Linux) o launchd (macOS). Detener: `rutas-jump-stop`.
  *
  * Rutas servidas:
- *   GET  /                -> dashboard.html (leído fresco en cada petición)
+ *   GET  /                -> regenera el dashboard (carpetas) y sirve dashboard.html
  *   GET  /api/llave       -> estado de la bóveda de credenciales (solo existencia de ficheros)
- *   POST /api/regenerate  -> ejecuta generate-dashboard.js y devuelve {ok}
+ *   POST /api/regenerate  -> regenerate-rutas.sh (alias cd-* + dashboard) y devuelve {ok}.
+ *                            Exige la cabecera X-Rutas: 1 (la manda el botón «Actualizar»).
  *   GET  /health          -> ok
  */
 'use strict';
@@ -23,11 +24,12 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFile } = require('child_process');
 
 const DIR = __dirname;
 const HTML = path.join(DIR, 'dashboard.html');
 const GEN = path.join(DIR, 'generate-dashboard.js');
+const REGEN = path.join(DIR, 'regenerate-rutas.sh');
 
 // Puerto: env RUTAS_PORT → RUTAS_PORT de rutas.config.sh → 7777. Valida que sea un puerto real.
 function validPort(n) { return Number.isInteger(n) && n > 0 && n < 65536; }
@@ -54,9 +56,29 @@ function sendJSON(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
-function regenerate() {
-  try { execFileSync(process.execPath, [GEN], { stdio: 'ignore' }); return true; }
-  catch (e) { return false; }
+// Regeneración. La rápida (completa=false) solo rehace el dashboard con generate-dashboard.js
+// (~0,3 s): es la de cada carga de la página. La completa (completa=true) corre
+// regenerate-rutas.sh, que rehace los alias cd-* y después el dashboard (~2 s): es la del botón
+// «Actualizar». Los topes evitan colgar el servidor si la Drive no responde (o si macOS espera el
+// permiso de File Provider): en ese caso se sirve la última versión generada.
+//
+// Nunca corren dos a la vez: las dos escriben dashboard.html.tmp, y una lo truncaría mientras la
+// otra lo renombra (página rota). Una carga que llega con otra en marcha espera a esa y no lanza
+// otra; una completa espera su turno.
+//
+// El PATH lleva delante la carpeta de este node: bajo launchd no está /usr/local/bin, y el script
+// se saltaría en silencio su `node generate-dashboard.js`.
+const ENV = { ...process.env, PATH: path.dirname(process.execPath) + path.delimiter + (process.env.PATH || '') };
+let enMarcha = null;
+function regenerar(completa) {
+  if (enMarcha && !completa) return enMarcha;
+  const p = (enMarcha || Promise.resolve()).then(() => new Promise((resolve) => {
+    const [cmd, args, timeout] = completa ? ['bash', [REGEN], 30000] : [process.execPath, [GEN], 10000];
+    execFile(cmd, args, { timeout, env: ENV }, (err) => resolve(!err));
+  }));
+  enMarcha = p;
+  p.then(() => { if (enMarcha === p) enMarcha = null; });
+  return p;
 }
 
 // ---------------- sonda de la bóveda (llave) ----------------
@@ -138,12 +160,25 @@ const server = http.createServer((req, res) => {
       sendJSON(res, 200, estadoLlave()); return;
     }
     if (url === '/api/regenerate' && req.method === 'POST') {
-      const ok = regenerate(); sendJSON(res, ok ? 200 : 500, { ok }); return;
+      // Cabecera propia: un fetch desde otra web que la lleve necesita preflight, y este servidor
+      // no lo autoriza; un formulario no puede ponerla. Así ninguna web ajena dispara esto.
+      if (req.headers['x-rutas'] !== '1') { sendJSON(res, 403, { error: 'falta la cabecera X-Rutas' }); return; }
+      regenerar(true).then((ok) => sendJSON(res, ok ? 200 : 500, { ok })); return;
     }
     sendJSON(res, 404, { error: 'no existe' }); return;
   }
 
-  // Cualquier otra ruta sirve el dashboard (leído fresco -> siempre la última versión generada)
+  // Al cargar la página se regenera el dashboard (la rápida): recargar el navegador = carpetas al
+  // día. Los alias cd-* solo los rehace el botón «Actualizar» (POST /api/regenerate).
+  if (url === '/' || url === '/index.html') {
+    regenerar(false).then(() => serveHtml(res));
+    return;
+  }
+  serveHtml(res);
+});
+
+// Sirve el dashboard (leído fresco -> siempre la última versión generada)
+function serveHtml(res) {
   fs.readFile(HTML, (err, buf) => {
     if (err) {
       res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
@@ -153,7 +188,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(buf);
   });
-});
+}
 
 server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {

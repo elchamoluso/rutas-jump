@@ -23,8 +23,8 @@ en la terminal.
 
 - **Atajos `cd-*` autogenerados** — un alias por carpeta de nivel 1 y 2 de tu carpeta base.
   `cd-drive` te lleva a la raíz; `cd-proyectos-cliente` a `proyectos/cliente`.
-- **Se regeneran solos** — al crear/mover/renombrar carpetas, `rutas-refresh` (o un cron) actualiza
-  los atajos. Nunca memorizas una ruta que va a cambiar.
+- **Se regeneran solos** — al crear/mover/renombrar carpetas, el botón **🔄 Actualizar** del dashboard,
+  `rutas-refresh` (o un cron) actualiza los atajos. Nunca memorizas una ruta que va a cambiar.
 - **Dashboard web local** — UI en **Adobe React Spectrum**. Cada **raíz** (My Drive · Unidades
   Compartidas · Home) es un **nodo de primer nivel** del árbol, con su alias (`cd-drive`/`cd-sd`/…)
   y botones *Copiar ruta* / *cd*, que se expande a su árbol de carpetas. ⭐ favoritos, buscador
@@ -192,9 +192,14 @@ necesitas alcanzarlo desde otra máquina). Por HTTP y no `file://` porque el nav
 ChromeOS no puede abrir ficheros del contenedor Linux; en macOS/Linux funciona igual. `localhost`
 además es *secure context*, que es lo que necesita el portapapeles. Requiere `node`.
 
+Cada carga de la página regenera el dashboard, así que **recargar = carpetas al día**. El botón
+**🔄 Actualizar** de la barra lateral regenera además los alias `cd-*` (`regenerate-rutas.sh`) y recarga.
+Las terminales ya abiertas cogen los alias nuevos con `rutas-refresh`.
+
 Si existe una unidad `rutas-jump.service` (systemd de usuario), **ella** es la dueña del servidor y
-`rutas-jump`/`rutas-jump-stop` hacen `systemctl --user start|stop`. Sin unidad se cae al modo
-`nohup`+`pkill` de siempre, que es lo que ocurre en macOS.
+`rutas-jump`/`rutas-jump-stop` hacen `systemctl --user start|stop`. En macOS hace lo mismo un LaunchAgent
+`~/Library/LaunchAgents/com.rutas-jump.plist` (`launchctl`). Sin ninguno se cae al modo `nohup`+`pkill`
+de siempre.
 
 ---
 
@@ -226,7 +231,8 @@ Añade a tu `crontab -e` (Linux/ChromeOS) para regenerar cada 30 minutos:
 */30 * * * * /bin/bash "/ruta/a/rutas-jump/regenerate-rutas.sh" >/dev/null 2>&1
 ```
 
-En macOS basta con ejecutar `rutas-refresh` cuando reorganices carpetas.
+Sin cron (en macOS, por ejemplo), basta con el botón **🔄 Actualizar** del dashboard o con
+`rutas-refresh` cuando reorganices carpetas.
 
 ---
 
