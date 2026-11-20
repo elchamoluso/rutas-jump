@@ -116,7 +116,10 @@ const COMMANDS_FILE = path.join(SCRIPT_DIR, 'commands.json');
 const COMMANDS_LOCAL_FILE = path.join(SCRIPT_DIR, 'commands.local.json');
 const LAUNCHERS_FILE = path.join(SCRIPT_DIR, 'launchers.json');
 const OUT = path.join(SCRIPT_DIR, 'dashboard.html');
-const OUT_TMP = OUT + '.tmp';
+// Temporal PROPIO de este proceso: si coinciden dos regeneraciones (el servidor, rutas-refresh, un
+// cron…), cada una escribe el suyo y el rename atómico deja siempre un dashboard completo. Con un
+// nombre fijo, una truncaba el temporal mientras la otra lo renombraba (página en blanco).
+const OUT_TMP = OUT + '.' + process.pid + '.tmp';
 const GENERATED_SH = path.join(SCRIPT_DIR, 'rutas.generated.sh');
 const CUSTOM_SH = path.join(SCRIPT_DIR, 'custom-aliases.sh');
 // Bundle React Spectrum PREBUILD y COMMITEADO. generate-dashboard.js solo lo INYECTA

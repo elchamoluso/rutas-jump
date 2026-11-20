@@ -13,7 +13,8 @@
  * Normal: lo arranca `rutas-jump` vía systemd (Linux) o launchd (macOS). Detener: `rutas-jump-stop`.
  *
  * Rutas servidas:
- *   GET  /                -> regenera el dashboard (carpetas) y sirve dashboard.html
+ *   GET  /                -> regenera el dashboard (carpetas) y sirve dashboard.html. No regenera
+ *                            si el Host no es el nuestro o si se generó hace menos de 2 s.
  *   GET  /api/llave       -> estado de la bóveda de credenciales (solo existencia de ficheros)
  *   POST /api/regenerate  -> regenerate-rutas.sh (alias cd-* + dashboard) y devuelve {ok}.
  *                            Exige la cabecera X-Rutas: 1 (la manda el botón «Actualizar»).
@@ -24,7 +25,7 @@ const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFile } = require('child_process');
+const { spawn } = require('child_process');
 
 const DIR = __dirname;
 const HTML = path.join(DIR, 'dashboard.html');
@@ -59,23 +60,63 @@ function sendJSON(res, code, obj) {
 // Regeneración. La rápida (completa=false) solo rehace el dashboard con generate-dashboard.js
 // (~0,3 s): es la de cada carga de la página. La completa (completa=true) corre
 // regenerate-rutas.sh, que rehace los alias cd-* y después el dashboard (~2 s): es la del botón
-// «Actualizar». Los topes evitan colgar el servidor si la Drive no responde (o si macOS espera el
-// permiso de File Provider): en ese caso se sirve la última versión generada.
+// «Actualizar».
 //
-// Nunca corren dos a la vez: las dos escriben dashboard.html.tmp, y una lo truncaría mientras la
-// otra lo renombra (página rota). Una carga que llega con otra en marcha espera a esa y no lanza
-// otra; una completa espera su turno.
-//
-// El PATH lleva delante la carpeta de este node: bajo launchd no está /usr/local/bin, y el script
-// se saltaría en silencio su `node generate-dashboard.js`.
+// - El servidor no lanza dos a la vez: una carga que llega con otra en marcha espera a esa y no
+//   lanza otra; una completa espera su turno. (Que no se pisen al escribir lo garantiza el
+//   temporal por proceso de generate-dashboard.js, también frente a rutas-refresh o un cron.)
+// - Una carga no vuelve a escanear si el dashboard tiene menos de 2 s: el botón «Actualizar» justo
+//   antes de recargar, o `rutas-jump` antes de abrir el navegador.
+// - Los topes evitan colgar el servidor si la Drive no responde (o si macOS espera el permiso de
+//   File Provider): al vencer, se mata el grupo de procesos entero y se sirve la última versión,
+//   aunque algo no muera.
+// - El PATH lleva delante la carpeta de este node: bajo launchd no está /usr/local/bin, y el script
+//   se saltaría en silencio su `node generate-dashboard.js`.
 const ENV = { ...process.env, PATH: path.dirname(process.execPath) + path.delimiter + (process.env.PATH || '') };
 let enMarcha = null;
+
+function recien() {
+  try { return Date.now() - fs.statSync(HTML).mtimeMs < 2000; } catch (e) { return false; }
+}
+
+// Temporales que dejó una regeneración matada a medias. Solo los de más de un minuto: uno reciente
+// puede ser de otra que está escribiendo ahora mismo.
+function limpiarTemporales() {
+  let nombres = [];
+  try { nombres = fs.readdirSync(DIR); } catch (e) { return; }
+  for (const n of nombres) {
+    if (!/^dashboard\.html\.\d+\.tmp$/.test(n)) continue;
+    const f = path.join(DIR, n);
+    try { if (Date.now() - fs.statSync(f).mtimeMs > 60000) fs.unlinkSync(f); } catch (e) { /* ya no está */ }
+  }
+}
+
+// Corre una regeneración con su tope. El hijo va en su propio grupo de procesos (detached): al vencer
+// el tope se mata el grupo entero, también el node que lanza regenerate-rutas.sh, y se contesta sin
+// esperar a que muera (un proceso colgado en la Drive puede no atender ni a SIGKILL).
+// spawn y no execFile: execFile no pasa `detached` a spawn, y el kill al grupo no encontraría a nadie.
+function correr(cmd, args, tope) {
+  return new Promise((resolve) => {
+    let t = null;
+    let hecho = false;
+    const fin = (ok) => { if (hecho) return; hecho = true; clearTimeout(t); resolve(ok); };
+    const hijo = spawn(cmd, args, { env: ENV, detached: true, stdio: 'ignore' });
+    hijo.on('error', () => fin(false));
+    hijo.on('exit', (code) => fin(code === 0));
+    t = setTimeout(() => {
+      try { process.kill(-hijo.pid, 'SIGKILL'); } catch (e) { /* ya no existe */ }
+      fin(false);
+    }, tope);
+  });
+}
+
 function regenerar(completa) {
   if (enMarcha && !completa) return enMarcha;
-  const p = (enMarcha || Promise.resolve()).then(() => new Promise((resolve) => {
-    const [cmd, args, timeout] = completa ? ['bash', [REGEN], 30000] : [process.execPath, [GEN], 10000];
-    execFile(cmd, args, { timeout, env: ENV }, (err) => resolve(!err));
-  }));
+  if (!enMarcha && !completa && recien()) return Promise.resolve(true);
+  const p = (enMarcha || Promise.resolve()).then(() => {
+    limpiarTemporales();
+    return completa ? correr('bash', [REGEN], 30000) : correr(process.execPath, [GEN], 10000);
+  });
   enMarcha = p;
   p.then(() => { if (enMarcha === p) enMarcha = null; });
   return p;
@@ -169,8 +210,10 @@ const server = http.createServer((req, res) => {
   }
 
   // Al cargar la página se regenera el dashboard (la rápida): recargar el navegador = carpetas al
-  // día. Los alias cd-* solo los rehace el botón «Actualizar» (POST /api/regenerate).
+  // día. Solo si la petición es nuestra (hostOk): si no, cualquier web podría disparar escaneos de
+  // la Drive pidiendo esta URL. Los alias cd-* solo los rehace el botón «Actualizar».
   if (url === '/' || url === '/index.html') {
+    if (!hostOk(req)) { serveHtml(res); return; }
     regenerar(false).then(() => serveHtml(res));
     return;
   }

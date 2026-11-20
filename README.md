@@ -201,6 +201,40 @@ Si existe una unidad `rutas-jump.service` (systemd de usuario), **ella** es la d
 `~/Library/LaunchAgents/com.rutas-jump.plist` (`launchctl`). Sin ninguno se cae al modo `nohup`+`pkill`
 de siempre.
 
+### Servidor permanente en macOS (opcional)
+
+Para que el servidor arranque solo al iniciar sesión, crea `~/Library/LaunchAgents/com.rutas-jump.plist`
+con este contenido. Cambia `/ruta/a/node` por la de tu `node` (`command -v node`; con Homebrew en Apple
+Silicon suele ser `/opt/homebrew/bin/node`) y `/ruta/a/rutas-jump` por la del repo:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.rutas-jump</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/ruta/a/node</string>
+    <string>/ruta/a/rutas-jump/serve-dashboard.js</string>
+  </array>
+  <key>WorkingDirectory</key><string>/ruta/a/rutas-jump</string>
+  <key>RunAtLoad</key><true/>
+  <!-- Como Restart=on-failure: con el puerto ocupado el servidor sale con 0 y no debe reintentar -->
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>StandardOutPath</key><string>/ruta/a/rutas-jump/.serve.log</string>
+  <key>StandardErrorPath</key><string>/ruta/a/rutas-jump/.serve.log</string>
+</dict>
+</plist>
+```
+
+Cárgalo con `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.rutas-jump.plist`. Desde ahí,
+`rutas-jump` y `rutas-jump-stop` lo usan solos.
+
+- Si tus raíces están en Google Drive, macOS pide permiso para que `node` lea sus archivos. Sin él, la
+  regeneración se queda esperando y, al vencer el tope, se sirve la última versión.
+- Tras actualizar `serve-dashboard.js`, reinícialo: `launchctl kickstart -k gui/$(id -u)/com.rutas-jump`.
+
 ---
 
 ## 🎨 Desarrollar la UI

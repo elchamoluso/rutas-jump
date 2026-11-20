@@ -7,17 +7,16 @@ rutas-help() {
     alias | grep "alias cd-" | sed "s/alias //;s/='cd /  →  /;s/\"\$DRIVE/\$DRIVE/;s/\"'\$//"
 }
 
-# Re-escanea las raíces y recarga los aliases en la sesión actual. Antes quita todos los cd-* de
-# esta terminal: si no, los de carpetas renombradas o borradas seguirían vivos hasta cerrarla.
-# (Solo los definen rutas.generated.sh y custom-aliases.sh, que se vuelven a cargar justo después.)
+# Re-escanea las raíces y recarga los aliases en la sesión actual. Antes quita los cd-* que definían
+# rutas.generated.sh y custom-aliases.sh ANTES de regenerar: si no, los de carpetas renombradas o
+# borradas seguirían vivos hasta cerrar la terminal. Los cd-* que vengan de otro sitio (tu .zshrc,
+# otra herramienta) no se tocan. El bucle va con <<< y no con una tubería: en bash, una tubería lo
+# correría en un subshell y el unalias no llegaría a esta terminal.
 rutas-refresh() {
+    local viejos a
+    viejos="$(sed -n 's/^alias \(cd-[^=]*\)=.*/\1/p' "$RUTAS_DIR/rutas.generated.sh" "$RUTAS_DIR/custom-aliases.sh" 2>/dev/null)"
     bash "$RUTAS_DIR/regenerate-rutas.sh" || return 1
-    if [ -n "${ZSH_VERSION:-}" ]; then
-        unalias -m 'cd-*' 2>/dev/null
-    else
-        local a
-        for a in $(compgen -a cd-); do unalias "$a"; done
-    fi
+    while read -r a; do [ -n "$a" ] && unalias "$a" 2>/dev/null; done <<< "$viejos"
     # shellcheck source=/dev/null
     [ -f "$RUTAS_DIR/rutas.generated.sh" ] && . "$RUTAS_DIR/rutas.generated.sh"
     [ -f "$RUTAS_DIR/custom-aliases.sh" ]  && . "$RUTAS_DIR/custom-aliases.sh"
@@ -59,7 +58,8 @@ rutas-jump() {
         systemctl --user start rutas-jump.service || { echo "✗ no arrancó rutas-jump.service" >&2; return 1; }
     elif _rutas_tiene_launchd; then
         launchctl print "gui/$(id -u)/com.rutas-jump" >/dev/null 2>&1 \
-            || launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.rutas-jump.plist"
+            || launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.rutas-jump.plist" \
+            || { echo "✗ no arrancó com.rutas-jump (launchctl bootstrap)" >&2; return 1; }
         launchctl kickstart "gui/$(id -u)/com.rutas-jump" >/dev/null 2>&1
     else
         # Sin unidad: como siempre. Si ya hay uno en el puerto, la 2ª instancia sale sola.

@@ -94,11 +94,16 @@ No lo rompas.
 - **Al día:** cada carga de la página regenera el dashboard (carpetas, ~0,3 s). El botón «Actualizar»
   de la barra lateral llama a `POST /api/regenerate`, que corre `regenerate-rutas.sh` (alias `cd-*` +
   dashboard, ~2 s), y recarga. La petición lleva la cabecera `X-Rutas: 1`: sin ella el servidor responde
-  403, y así ninguna web ajena la dispara (CSRF). Las terminales abiertas cogen los alias nuevos con
-  `rutas-refresh`, que antes quita todos los `cd-*` para que no sigan vivos los de carpetas renombradas;
-  las terminales nuevas los cargan solas.
-- **Nunca dos regeneraciones a la vez** (`regenerar()` en `serve-dashboard.js`): las dos escriben
-  `dashboard.html.tmp`, y una lo truncaría mientras la otra lo renombra. No lo quites.
+  403, y así ninguna web ajena la dispara (CSRF). La carga solo regenera si el Host es el nuestro.
+  Las terminales abiertas cogen los alias nuevos con `rutas-refresh`, que antes quita los `cd-*` que
+  definían sus ficheros (los de otro sitio no los toca) para que no sigan vivos los de carpetas
+  renombradas; las terminales nuevas los cargan solas.
+- **Que dos regeneraciones no se pisen:** cada `generate-dashboard.js` escribe su propio temporal
+  (`dashboard.html.<pid>.tmp`) y lo renombra, así que siempre queda un dashboard completo, venga de
+  donde venga (el servidor, `rutas-refresh`, un cron). Con un nombre fijo, una truncaba el temporal
+  mientras la otra lo renombraba. Además, `regenerar()` en `serve-dashboard.js` no lanza dos a la vez,
+  no vuelve a escanear si el dashboard tiene menos de 2 s y, al vencer el tope, mata el grupo de
+  procesos entero y sirve la última versión. No quites nada de esto.
 
 **Para AIs — REGLA CRÍTICA:**
 - Si creas/borras/renombras carpetas o editas `commands.json` → `node "$RUTAS_DIR/generate-dashboard.js"`.
@@ -149,7 +154,8 @@ Reglas que **no** se rompen:
 
 **Dueño del servidor:** si existe la unidad `rutas-jump.service` (systemd de usuario), ella
 manda: `rutas-jump`/`rutas-jump-stop` hacen `systemctl --user start|stop`. En macOS hace lo mismo
-el LaunchAgent `~/Library/LaunchAgents/com.rutas-jump.plist` (`launchctl bootstrap|kickstart|bootout`).
+el LaunchAgent `~/Library/LaunchAgents/com.rutas-jump.plist` (`launchctl bootstrap|kickstart|bootout`;
+la plantilla está en el README).
 Sin ninguno de los dos se cae al modo `nohup`+`pkill` de siempre. No mezcles dos dueños del puerto.
 Bajo launchd el PATH no trae `/usr/local/bin`: por eso el servidor antepone la carpeta de su `node` al
 lanzar `regenerate-rutas.sh`. Y `node` necesita el permiso de macOS para leer la Drive (File Provider):
