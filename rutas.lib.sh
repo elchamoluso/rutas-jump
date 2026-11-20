@@ -2,9 +2,11 @@
 # rutas.lib.sh — funciones de la herramienta (dashboard web + helpers).
 # Lo sourcea loader.sh. Usa $RUTAS_DIR (carpeta del repo) y $RUTAS_PORT.
 
-# Lista todos los aliases cd-* con su destino.
+# Lista todos los aliases cd-* con su destino. bash los lista como «alias nombre='valor'»; zsh, sin el
+# «alias» delante salvo con -L (por eso, en zsh, rutas-help no sacaba nada).
 rutas-help() {
-    alias | grep "alias cd-" | sed "s/alias //;s/='cd /  →  /;s/\"\$DRIVE/\$DRIVE/;s/\"'\$//"
+    { if [ -n "${ZSH_VERSION:-}" ]; then alias -L; else alias; fi; } \
+        | grep "^alias cd-" | sed "s/^alias //;s/='cd \"\(.*\)\"'\$/  →  \1/"
 }
 
 # Re-escanea las raíces y recarga los aliases en la sesión actual. Antes quita los cd-* que definían
